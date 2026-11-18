@@ -1,0 +1,619 @@
+diff --git a/camera/device/1.0/default/CameraDevice.cpp b/camera/device/1.0/default/CameraDevice.cpp
+index a1f1830..19710c8 100644
+--- a/camera/device/1.0/default/CameraDevice.cpp
++++ b/camera/device/1.0/default/CameraDevice.cpp
+@@ -23,6 +23,10 @@
+ 
+ #include <media/hardware/HardwareAPI.h> // For VideoNativeHandleMetadata
+ #include "CameraDevice_1_0.h"
++#include "GtexRecordingBridge.h"
++#include <cstdlib>
++#include <functional>
++#include <cstdio>
+ 
+ namespace android {
+ namespace hardware {
+@@ -84,6 +88,244 @@ Status CameraDevice::initStatus() const {
+     return status;
+ }
+ 
++namespace {
++struct GtexScope { std::function<void()> finish; ~GtexScope() { finish(); } };
++std::string gtexValue(const std::string& text, const std::string& key) {
++    const std::string prefix=key+"=";
++    size_t start=0;
++    while (start<text.size()) {
++        size_t end=text.find(';',start); if(end==std::string::npos) end=text.size();
++        if(text.compare(start,prefix.size(),prefix)==0)
++            return text.substr(start+prefix.size(),end-start-prefix.size());
++        start=end+1;
++    }
++    return "";
++}
++std::string gtexSet(std::string text,const std::string& key,const std::string& value) {
++    const std::string prefix=key+"="; size_t start=0;
++    while(start<text.size()) {
++        size_t end=text.find(';',start); if(end==std::string::npos) end=text.size();
++        if(text.compare(start,prefix.size(),prefix)==0) {
++            text.replace(start,end-start,prefix+value); return text;
++        }
++        start=end+1;
++    }
++    if(!text.empty() && text.back()!=';') text+=';';
++    return text+prefix+value;
++}
++}
++
++CameraDevice::BridgePool::~BridgePool() {
++    if(registered && callback) {
++        auto result=callback->unregisterMemory(id);
++        if(!result.isOk()) ALOGE("GTEX bridge unregisterMemory failed for id=%u",id);
++    }
++}
++void CameraDevice::cleanupBridgeIdlePools(bool closing) {
++    std::vector<std::shared_ptr<BridgePool>> drained;
++    sp<ICameraDeviceCallback> oldCallback;
++    {
++        Mutex::Autolock lock(mBridgeLock);
++        if(closing) {oldCallback=mBridgeCallback;mBridgeCallback=nullptr;}
++        if(closing || !mBridgeConfigured) {
++            auto it=mBridgePools.begin();
++            while(it!=mBridgePools.end()) {
++                bool busy=false;for(bool value:(*it)->busy) busy|=value;
++                if((*it)->retired && !busy) {
++                    mBridgeMemoryIds.erase((*it)->id);drained.push_back(*it);it=mBridgePools.erase(it);
++                } else ++it;
++            }
++        }
++    }
++    // Destructor unregisters and drops captured callbacks AFTER both locks are released.
++}
++void CameraDevice::retireBridge() {
++    Mutex::Autolock lock(mBridgeLock);
++    mBridgeActive=false;
++    for(auto& pool:mBridgePools) pool->retired=true;
++}
++void CameraDevice::drainBridge() {
++    Mutex::Autolock lock(mBridgeLock);
++    while(mBridgeCallbacks) mBridgeCondition.wait(mBridgeLock);
++}
++bool CameraDevice::releaseBridgeFrame(uint32_t id,uint32_t index) {
++    bool recognized=false;
++    {
++        Mutex::Autolock lock(mBridgeLock);
++        recognized=mBridgeMemoryIds.count(id)!=0;
++        if(!recognized) return false;
++        for(auto& pool:mBridgePools) if(pool->id==id) {
++            if(index>=pool->busy.size() || !pool->busy[index])
++                ALOGE("GTEX bridge duplicate/invalid release id=%u index=%u",id,index);
++            else pool->busy[index]=false;
++            break;
++        }
++    }
++    cleanupBridgeIdlePools(false);
++    return recognized; // Recognized copied memory is never forwarded into the vendor callback.
++}
++void CameraDevice::bridgeTimestamp(nsecs_t timestamp,int32_t message,
++        const camera_memory_t* data,unsigned index) {
++    {
++        Mutex::Autolock lock(mBridgeLock); ++mBridgeCallbacks;
++    }
++    GtexScope finished{[this] {
++        Mutex::Autolock lock(mBridgeLock); --mBridgeCallbacks;mBridgeCondition.broadcast();
++    }};
++    if(!data || !data->handle) {ALOGE("GTEX bridge missing metadata handle");return;}
++    sp<CameraHeapMemory> original(static_cast<CameraHeapMemory*>(data->handle));
++    if(original->mBufSize!=28 || index>=original->mNumBufs || !original->mHidlHeapMemData) {
++        ALOGE("GTEX bridge malformed vendor metadata size=%zu index=%u",original->mBufSize,index);
++        return; // Cannot safely invent an opaque pointer for an invalid producer index.
++    }
++    void* opaque=static_cast<uint8_t*>(original->mHidlHeapMemData)+index*28;
++    camera_device_t* vendor=mDevice; // Vendor close joins callbacks before destroying this device.
++    if(!vendor || !vendor->ops->release_recording_frame) return;
++    bool returned=false;
++    auto giveBack=[&] {if(!returned) {returned=true;vendor->ops->release_recording_frame(vendor,opaque);}};
++    GtexScope returnOriginal{giveBack};
++    uint32_t words[7];memcpy(words,opaque,sizeof(words));
++    uint32_t width,height;uint64_t generation;bool logFrame=false;sp<ICameraDeviceCallback> callback;
++    {
++        Mutex::Autolock lock(mBridgeLock);
++        if(!mBridgeActive) return;
++        width=mBridgeWidth;height=mBridgeHeight;generation=mBridgeGeneration;callback=mBridgeCallback;
++        logFrame=mBridgeLoggedFrames++<3;
++    }
++    if(words[0]!=0 || !callback || !width || !height || !words[2]) {
++        ALOGE("GTEX bridge invalid metadata type=%u VA=%x",words[0],words[2]);return;
++    }
++    const size_t bytes=static_cast<size_t>(width)*height*3/2;
++    std::shared_ptr<BridgePool> pool;size_t slot=4;
++    {
++        Mutex::Autolock lock(mBridgeLock);
++        for(auto& candidate:mBridgePools) if(!candidate->retired && candidate->generation==generation) {
++            pool=candidate;break;
++        }
++        if(!pool) for(auto& candidate:mBridgePools) {
++            bool busy=false;for(bool value:candidate->busy) busy|=value;
++            if(candidate->retired && !busy && candidate->callback==callback &&
++                    candidate->memory->mBufSize==bytes) {
++                candidate->retired=false;candidate->generation=generation;
++                pool=candidate;break;
++            }
++        }
++    }
++    if(!pool) {
++        // IDs are recyclable client FDs. Release only drained retired registrations;
++        // client exactly-once returns are required, as in normal slot reuse.
++        std::vector<std::shared_ptr<BridgePool>> drained;
++        {
++            Mutex::Autolock lock(mBridgeLock);
++            auto it=mBridgePools.begin();
++            while(it!=mBridgePools.end()) {
++                bool busy=false;for(bool value:(*it)->busy) busy|=value;
++                if((*it)->retired && !busy) {
++                    mBridgeMemoryIds.erase((*it)->id);drained.push_back(*it);it=mBridgePools.erase(it);
++                } else ++it;
++            }
++        }
++        drained.clear(); // synchronous unregister outside all locks
++        auto created=std::make_shared<BridgePool>();
++        created->memory=new CameraHeapMemory(mAshmemAllocator,bytes,4);
++        if(!created->memory->mHidlHeapMemory || !created->memory->mHidlHeapMemData ||
++                !created->memory->mHidlHandle) return;
++        auto result=callback->registerMemory(created->memory->mHidlHandle,bytes,4);
++        if(!result.isOk()) return;
++        created->id=result;
++        if(!created->id) {ALOGE("GTEX bridge registerMemory failed (id0)");return;}
++        created->callback=callback;created->registered=true;
++        created->generation=generation;
++        bool accept=false;
++        bool vendorIdCollision=false;
++        {Mutex::Autolock memoryLock(mMemoryMapLock);vendorIdCollision=mMemoryMap.count(created->id)!=0;}
++        {
++            Mutex::Autolock lock(mBridgeLock);
++            bool duplicate=false;
++            for(auto& existing:mBridgePools) if(!existing->retired && existing->generation==generation) {
++                pool=existing;duplicate=true;break;
++            }
++            if(!duplicate && !vendorIdCollision && mBridgeActive && generation==mBridgeGeneration &&
++                    mBridgePools.size()<8 && mBridgeMemoryIds.size()<256 &&
++                    !mBridgeMemoryIds.count(created->id)) {
++                mBridgeMemoryIds.insert(created->id);mBridgePools.push_back(created);
++                pool=created;accept=true;
++            }
++        }
++        if(!accept && !pool) return;
++    }
++    {
++        Mutex::Autolock lock(mBridgeLock);
++        if(!mBridgeActive || generation!=mBridgeGeneration || pool->retired ||
++                pool->memory->mBufSize!=bytes) return;
++        for(size_t i=0;i<pool->busy.size();++i) if(!pool->busy[i]) {slot=i;pool->busy[i]=true;break;}
++    }
++    if(slot==4) return; // Bounded backpressure: drop original, never overwrite a client-owned slot.
++    bool published=false;
++    GtexScope releaseSlot{[&] {if(!published) {
++        Mutex::Autolock lock(mBridgeLock);pool->busy[slot]=false;
++    }}};
++    bool copied=false;
++    {
++        Mutex::Autolock windowLock(mHalPreviewWindow.mLock);
++        for(const auto& entry:mHalPreviewWindow.mCirculatingBuffers) {
++            buffer_handle_t handle=entry.second;
++            if(!handle || handle->version!=12 || handle->numFds!=1 || handle->numInts!=18) continue;
++            uint32_t fields[19];memcpy(fields,handle->data,sizeof(fields));
++            // Exact selected ARM32 scx30g_v2 producer ABI; no width-as-stride assumption.
++            uint32_t base=fields[9];
++            if(fields[1]!=0x3141592 || base!=words[2]) continue;
++            const size_t span=fields[4],sourceWidth=fields[5],sourceHeight=fields[6],stride=fields[8];
++            if(logFrame) ALOGI("GTEX metadata type=%u phy=%x VA=%x w=%u h=%u crop=%u,%u stride=%zu span=%zu out=%ux%u",
++                    words[0],words[1],words[2],words[3],words[4],words[5],words[6],stride,span,width,height);
++            if(sourceWidth!=words[3] || sourceHeight!=words[4] ||
++                    !sourceWidth || !sourceHeight || sourceWidth>4096 || sourceHeight>4096 ||
++                    stride<sourceWidth || stride>8192 || ((stride|sourceWidth|sourceHeight)&1) ||
++                    span<stride*sourceHeight*3/2 || !(fields[2]&4) ||
++                    fields[7]!=0x11 || span>32*1024*1024 ||
++                    static_cast<uint64_t>(base)+span>UINT32_MAX) break; // NV21 only.
++            // Initial bridge scope is full-frame conversion, never an implicit top-left crop.
++            if(words[5] || words[6] || sourceWidth!=width || sourceHeight!=height) {
++                if(logFrame) ALOGE("GTEX bridge requires matching full-frame geometry; scaling not implemented");
++                break;
++            }
++            void* address=nullptr;
++            int locked=mBridgeGralloc->lock(mBridgeGralloc,handle,GRALLOC_USAGE_SW_READ_OFTEN,
++                    0,0,sourceWidth,sourceHeight,&address);
++            if(locked==0) {
++                android_ycbcr layout{};
++                int described=mBridgeGralloc->lock_ycbcr(mBridgeGralloc,handle,GRALLOC_USAGE_SW_READ_OFTEN,
++                        0,0,sourceWidth,sourceHeight,&layout);
++                const uintptr_t y=reinterpret_cast<uintptr_t>(layout.y);
++                const uintptr_t cr=reinterpret_cast<uintptr_t>(layout.cr);
++                const uintptr_t cb=reinterpret_cast<uintptr_t>(layout.cb);
++                if(described==0 && address==layout.y && y==base &&
++                        layout.ystride==stride && layout.cstride==stride &&
++                        layout.chroma_step==2 && cr==base+stride*sourceHeight && cb==cr+1)
++                    copied=gtex_recording::nv21ToI420(reinterpret_cast<uint8_t*>(y),span,stride,
++                            sourceWidth,sourceHeight,0,0,width,height,
++                            static_cast<uint8_t*>(pool->memory->mHidlHeapMemData)+slot*bytes,bytes);
++                if(mBridgeGralloc->unlock(mBridgeGralloc,handle)!=0) copied=false;
++            }
++            break;
++        }
++    }
++    if(!copied) {if(logFrame) ALOGE("GTEX bridge dropped frame: no validated NV21 source mapping");return;}
++    giveBack(); // Copy owns its bytes now. Return vendor GPU owner exactly once BEFORE publication.
++    {
++        Mutex::Autolock lock(mBridgeLock);
++        if(!mBridgeActive || generation!=mBridgeGeneration || pool->retired) return;
++    }
++    // From this point delivery may have happened even if the transport reports failure.
++    // Retain ownership until a client return; never recycle ambiguous delivered bytes.
++    published=true;
++    auto result=pool->callback->dataCallbackTimestamp((DataCallbackMsg)message,pool->id,slot,timestamp);
++    if(!result.isOk()) {
++        Mutex::Autolock lock(mBridgeLock);pool->retired=true;
++        ALOGE("GTEX bridge timestamp transport failed; retaining outstanding slot");
++    }
++}
++
+ CameraDevice::CameraDevice(
+     sp<CameraModule> module, const std::string& cameraId,
+     const SortedVector<std::pair<std::string, std::string>>& cameraDeviceNames) :
+@@ -91,6 +333,14 @@ CameraDevice::CameraDevice(
+         mCameraId(cameraId),
+         mDisconnected(false),
+         mCameraDeviceNames(cameraDeviceNames) {
++    const char* gate=getenv("GTEX_LEGACY_RECORDING_BRIDGE");
++    mBridgeEnabled=gate && !strcmp(gate,"1") && module->getModuleApiVersion()==1 &&
++        module->getModuleName() && !strcmp(module->getModuleName(),"Sprd camera HAL");
++    if(mBridgeEnabled) {
++        const hw_module_t* gralloc=nullptr;
++        if(hw_get_module(GRALLOC_HARDWARE_MODULE_ID,&gralloc)==0 && gralloc)
++            mBridgeGralloc=reinterpret_cast<const gralloc_module_t*>(gralloc);
++    }
+     mCameraIdInt = atoi(mCameraId.c_str());
+     // Should not reach here as provider also validate ID
+     if (mCameraIdInt < 0 || mCameraIdInt >= module->getNumberOfCameras()) {
+@@ -113,6 +363,15 @@ CameraDevice::CameraDevice(
+ }
+ 
+ CameraDevice::~CameraDevice() {
++    if(mBridgeEnabled) {
++        {Mutex::Autolock lock(mLock);if(mDevice) closeLocked();}
++        mHalPreviewWindow.cleanUpCirculatingBuffers();
++        // Busy retired pool FDs stay reserved until their valid client releases.
++        // The final unregister is outside all locks; callbacks have drained in closeLocked.
++        std::vector<std::shared_ptr<BridgePool>> retired;
++        {Mutex::Autolock lock(mBridgeLock);retired.swap(mBridgePools);}
++        return;
++    }
+     Mutex::Autolock _l(mLock);
+     if (mDevice != nullptr) {
+         ALOGW("%s: camera %s is deleted while open", __FUNCTION__, mCameraId.c_str());
+@@ -534,6 +793,10 @@ void CameraDevice::sDataCbTimestamp(nsecs_t timestamp, int32_t msg_type,
+         const camera_memory_t *data, unsigned index, void *user) {
+     ALOGV("%s", __FUNCTION__);
+     CameraDevice* object = static_cast<CameraDevice*>(user);
++    if(object->mBridgeEnabled) {
++        object->bridgeTimestamp(timestamp,msg_type,data,index);
++        return;
++    }
+     // Start refcounting the heap object from here on.  When the clients
+     // drop all references, it will be destroyed (as well as the enclosed
+     // MemoryHeapBase.
+@@ -756,6 +1019,19 @@ Return<void> CameraDevice::enableMsgType(uint32_t msgType) {
+ 
+ Return<void> CameraDevice::disableMsgType(uint32_t msgType) {
+     ALOGV("%s(%s)", __FUNCTION__, mCameraId.c_str());
++    if(mBridgeEnabled && (msgType & CAMERA_MSG_VIDEO_FRAME)) {
++        std::vector<std::shared_ptr<BridgePool>> revoked;
++        {
++            Mutex::Autolock deviceLock(mLock);
++            retireBridge();
++            if(mDevice && mDevice->ops->disable_msg_type) mDevice->ops->disable_msg_type(mDevice,msgType);
++            drainBridge();
++            Mutex::Autolock bridgeLock(mBridgeLock);
++            revoked.swap(mBridgePools);mBridgeMemoryIds.clear();
++        }
++        // HAL1 disable revokes all old video leases; unregister outside every lock.
++        return Void();
++    }
+     Mutex::Autolock _l(mLock);
+     if (!mDevice) {
+         ALOGE("%s called while camera is not opened", __FUNCTION__);
+@@ -826,6 +1102,35 @@ Return<Status> CameraDevice::storeMetaDataInBuffers(bool enable) {
+         ALOGE("%s called while camera is not opened", __FUNCTION__);
+         return Status::OPERATION_NOT_SUPPORTED;
+     }
++    if(mBridgeEnabled) {
++        if(enable) return Status::OPERATION_NOT_SUPPORTED;
++        {Mutex::Autolock lock(mBridgeLock);
++         if(mBridgeActive || mBridgeCallbacks) return Status::OPERATION_NOT_SUPPORTED;}
++        if(!mBridgeGralloc || !mBridgeGralloc->lock || !mBridgeGralloc->lock_ycbcr ||
++                !mBridgeGralloc->unlock || !mDevice->ops->get_parameters || !mDevice->ops->store_meta_data_in_buffers)
++            return Status::OPERATION_NOT_SUPPORTED;
++        char* raw=mDevice->ops->get_parameters(mDevice);
++        if(!raw) return Status::INTERNAL_ERROR;
++        const std::string text(raw);
++        if(mDevice->ops->put_parameters) mDevice->ops->put_parameters(mDevice,raw); else free(raw);
++        const std::string dimensions=gtexValue(text,"video-size").empty() ?
++            gtexValue(text,"preview-size") : gtexValue(text,"video-size");
++        unsigned width=0,height=0;char extra=0;
++        if(sscanf(dimensions.c_str(),"%ux%u%c",&width,&height,&extra)!=2 ||
++                !width || !height || width>1280 || height>720 || ((width|height)&1) ||
++                gtexValue(text,"video-frame-format")!="yuv420sp") return Status::ILLEGAL_ARGUMENT;
++        status_t status=mDevice->ops->store_meta_data_in_buffers(mDevice,true);
++        if(status!=OK) return getHidlStatus(status);
++        {
++            Mutex::Autolock lock(mBridgeLock);
++            mBridgeWidth=width;mBridgeHeight=height;mBridgeCallback=mDeviceCallback;
++            mBridgePreviewSize=gtexValue(text,"preview-size");
++            mBridgeConfigured=true;
++        }
++        mMetadataMode=false;
++        ALOGI("GTEX recording bridge configured raw I420 %ux%u, vendor metadata retained",width,height);
++        return Status::OK;
++    }
+     if (mDevice->ops->store_meta_data_in_buffers) {
+         status_t s = mDevice->ops->store_meta_data_in_buffers(mDevice, enable);
+         if (s == OK && enable) {
+@@ -844,13 +1149,44 @@ Return<Status> CameraDevice::startRecording() {
+         return Status::OPERATION_NOT_SUPPORTED;
+     }
+     if (mDevice->ops->start_recording) {
+-        return getHidlStatus(mDevice->ops->start_recording(mDevice));
++        if(mBridgeEnabled) {
++            retireBridge();drainBridge();
++            Mutex::Autolock lock(mBridgeLock);
++            if(!mBridgeConfigured) return Status::OPERATION_NOT_SUPPORTED;
++            const size_t bytes=static_cast<size_t>(mBridgeWidth)*mBridgeHeight*3/2;
++            size_t retained=0;bool reusable=false;
++            for(auto& pool:mBridgePools) {
++                bool busy=false;for(bool value:pool->busy) busy|=value;
++                retained+=busy;
++                reusable|=!busy && pool->callback==mBridgeCallback && pool->memory->mBufSize==bytes;
++            }
++            if(retained>=8 && !reusable) {
++                ALOGE("GTEX bridge start refused: client still owns eight retired pools");
++                return Status::INTERNAL_ERROR;
++            }
++            for(auto& pool:mBridgePools) pool->retired=true;
++            ++mBridgeGeneration;mBridgeLoggedFrames=0;mBridgeActive=true;
++        }
++        status_t status=mDevice->ops->start_recording(mDevice);
++        if(mBridgeEnabled && status!=OK) retireBridge();
++        return getHidlStatus(status);
+     }
+     return Status::ILLEGAL_ARGUMENT;
+ }
+ 
+ Return<void> CameraDevice::stopRecording() {
+     ALOGV("%s(%s)", __FUNCTION__, mCameraId.c_str());
++    if(mBridgeEnabled) {
++        {
++            Mutex::Autolock deviceLock(mLock);
++            retireBridge();
++            if(mDevice && mDevice->ops->disable_msg_type)
++                mDevice->ops->disable_msg_type(mDevice,CAMERA_MSG_VIDEO_FRAME);
++            drainBridge();
++            if(mDevice && mDevice->ops->stop_recording) mDevice->ops->stop_recording(mDevice);
++        }
++            return Void();
++    }
+     Mutex::Autolock _l(mLock);
+     if (!mDevice) {
+         ALOGE("%s called while camera is not opened", __FUNCTION__);
+@@ -921,6 +1257,10 @@ void CameraDevice::releaseRecordingFrameLocked(
+ 
+ Return<void> CameraDevice::releaseRecordingFrame(uint32_t memId, uint32_t bufferIndex) {
+     ALOGV("%s(%s)", __FUNCTION__, mCameraId.c_str());
++    if(mBridgeEnabled) {
++        if(!releaseBridgeFrame(memId,bufferIndex)) ALOGE("GTEX unknown raw recording return id=%u",memId);
++        return Void();
++    }
+     Mutex::Autolock _l(mLock);
+     releaseRecordingFrameLocked(memId, bufferIndex, nullptr);
+     return Void();
+@@ -929,6 +1269,10 @@ Return<void> CameraDevice::releaseRecordingFrame(uint32_t memId, uint32_t buffer
+ Return<void> CameraDevice::releaseRecordingFrameHandle(
+         uint32_t memId, uint32_t bufferIndex, const hidl_handle& frame) {
+     ALOGV("%s(%s)", __FUNCTION__, mCameraId.c_str());
++    if(mBridgeEnabled) {
++        if(!releaseBridgeFrame(memId,bufferIndex)) ALOGE("GTEX unknown raw recording return id=%u",memId);
++        return Void();
++    }
+     Mutex::Autolock _l(mLock);
+     releaseRecordingFrameLocked(
+             memId, bufferIndex, frame.getNativeHandle());
+@@ -938,6 +1282,11 @@ Return<void> CameraDevice::releaseRecordingFrameHandle(
+ Return<void> CameraDevice::releaseRecordingFrameHandleBatch(
+         const hidl_vec<VideoFrameMessage>& msgs) {
+     ALOGV("%s(%s)", __FUNCTION__, mCameraId.c_str());
++    if(mBridgeEnabled) {
++        for(const auto& msg:msgs) if(!releaseBridgeFrame(msg.data,msg.bufferIndex))
++            ALOGE("GTEX bridge unknown batch return id=%u",msg.data);
++        return Void();
++    }
+     Mutex::Autolock _l(mLock);
+     for (auto& msg : msgs) {
+         releaseRecordingFrameLocked(
+@@ -1006,7 +1355,22 @@ Return<Status> CameraDevice::setParameters(const hidl_string& params) {
+         return Status::OPERATION_NOT_SUPPORTED;
+     }
+     if (mDevice->ops->set_parameters) {
+-        return getHidlStatus(mDevice->ops->set_parameters(mDevice, params.c_str()));
++        std::string normalized=params.c_str();
++        if(mBridgeEnabled) {
++            {Mutex::Autolock lock(mBridgeLock);
++             if(mBridgeActive) {
++                const std::string dimensions=gtexValue(normalized,"video-size");
++                const std::string expected=std::to_string(mBridgeWidth)+"x"+std::to_string(mBridgeHeight);
++                const std::string preview=gtexValue(normalized,"preview-size");
++                if((!dimensions.empty() && dimensions!=expected) ||
++                        (!preview.empty() && preview!=mBridgePreviewSize)) return Status::OPERATION_NOT_SUPPORTED;
++             }}
++            if(gtexValue(normalized,"video-frame-format")=="yuv420p")
++                normalized=gtexSet(normalized,"video-frame-format","yuv420sp");
++            if(gtexValue(normalized,"video-frame-format-values")=="yuv420p")
++                normalized=gtexSet(normalized,"video-frame-format-values",mBridgeVendorFormatValues);
++        }
++        return getHidlStatus(mDevice->ops->set_parameters(mDevice, normalized.c_str()));
+     }
+     return Status::ILLEGAL_ARGUMENT;
+ }
+@@ -1022,7 +1386,13 @@ Return<void> CameraDevice::getParameters(getParameters_cb _hidl_cb) {
+     }
+     if (mDevice->ops->get_parameters) {
+         char *temp = mDevice->ops->get_parameters(mDevice);
++        if(!temp) {_hidl_cb(outStr);return Void();}
+         outStr = temp;
++        if(mBridgeEnabled && gtexValue(temp,"video-frame-format")=="yuv420sp") {
++            mBridgeVendorFormatValues=gtexValue(temp,"video-frame-format-values");
++            std::string advertised=gtexSet(temp,"video-frame-format","yuv420p");
++            outStr=gtexSet(advertised,"video-frame-format-values","yuv420p");
++        }
+         if (mDevice->ops->put_parameters) {
+             mDevice->ops->put_parameters(mDevice, temp);
+         } else {
+@@ -1047,19 +1417,44 @@ Return<Status> CameraDevice::sendCommand(CommandType cmd, int32_t arg1, int32_t
+ }
+ 
+ Return<void> CameraDevice::close() {
+-    Mutex::Autolock _l(mLock);
+-    closeLocked();
++    if(mBridgeEnabled) {
++        std::vector<std::shared_ptr<BridgePool>> detached;
++        sp<ICameraDeviceCallback> oldCallback;
++        sp<ICameraDevicePreviewCallback> oldPreview;
++        {
++            Mutex::Autolock lock(mLock);
++            closeLocked();
++            oldCallback=mDeviceCallback;mDeviceCallback=nullptr;
++            {Mutex::Autolock bridgeLock(mBridgeLock);
++             detached.swap(mBridgePools);mBridgeMemoryIds.clear();mBridgeCallback=nullptr;}
++            mHalPreviewWindow.cleanUpCirculatingBuffers();
++            {Mutex::Autolock windowLock(mHalPreviewWindow.mLock);
++             oldPreview=mHalPreviewWindow.mPreviewCallback;mHalPreviewWindow.mPreviewCallback=nullptr;}
++        }
++        // Client IMemory retains its own heap FD; close cancels all old vendor leases.
++        // Unregister/drop all owned registrations outside locks, including copied busy slots.
++        return Void();
++    }
++    { Mutex::Autolock _l(mLock); closeLocked(); }
+     return Void();
+ }
+ 
+ void CameraDevice::closeLocked() {
+     ALOGI("Closing camera %s", mCameraId.c_str());
+     if(mDevice) {
++        if(mBridgeEnabled) {
++            retireBridge();
++            if(mDevice->ops->disable_msg_type) mDevice->ops->disable_msg_type(mDevice,CAMERA_MSG_VIDEO_FRAME);
++            drainBridge();
++            if(mBridgeConfigured && mDevice->ops->stop_recording) mDevice->ops->stop_recording(mDevice);
++        }
+         int rc = mDevice->common.close(&mDevice->common);
++        if(mBridgeEnabled) drainBridge();
+         if (rc != OK) {
+             ALOGE("Could not close camera %s: %d", mCameraId.c_str(), rc);
+         }
+         mDevice = nullptr;
++        if(mBridgeEnabled) {Mutex::Autolock lock(mBridgeLock);mBridgeConfigured=false;}
+     }
+ }
+ 
+diff --git a/camera/device/1.0/default/CameraDevice_1_0.h b/camera/device/1.0/default/CameraDevice_1_0.h
+index 2b35a73..0910e75 100644
+--- a/camera/device/1.0/default/CameraDevice_1_0.h
++++ b/camera/device/1.0/default/CameraDevice_1_0.h
+@@ -18,6 +18,11 @@
+ #define ANDROID_HARDWARE_CAMERA_DEVICE_V1_0_CAMERADEVICE_H
+ 
+ #include <unordered_map>
++#include <hardware/gralloc.h>
++#include <array>
++#include <memory>
++#include <set>
++#include <utils/Condition.h>
+ #include "utils/Mutex.h"
+ #include "utils/SortedVector.h"
+ #include "CameraModule.h"
+@@ -131,8 +136,8 @@ private:
+ 
+         // Shared memory related members
+         hidl_memory      mHidlHeap;
+-        native_handle_t* mHidlHandle; // contains one shared memory FD
+-        void*            mHidlHeapMemData;
++        native_handle_t* mHidlHandle = nullptr; // contains one shared memory FD
++        void*            mHidlHeapMemData = nullptr;
+         sp<IMemory>      mHidlHeapMemory; // munmap happens in ~IMemory()
+ 
+         CameraMemory handle;
+@@ -178,6 +183,33 @@ private:
+                                   // must not hold mLock after this lock is acquired
+     std::unordered_map<MemoryId, CameraHeapMemory*> mMemoryMap;
+ 
++    struct BridgePool {
++        sp<CameraHeapMemory> memory;
++        sp<ICameraDeviceCallback> callback;
++        uint32_t id=0;
++        uint64_t generation=0;
++        bool retired=false, registered=false;
++        std::array<bool,4> busy{{false,false,false,false}};
++        ~BridgePool();
++    };
++    bool mBridgeEnabled=false, mBridgeConfigured=false, mBridgeActive=false;
++    std::string mBridgeVendorFormatValues, mBridgePreviewSize;
++    const gralloc_module_t* mBridgeGralloc=nullptr;
++    mutable Mutex mBridgeLock;
++    Condition mBridgeCondition;
++    uint64_t mBridgeGeneration=0;
++    size_t mBridgeCallbacks=0;
++    uint64_t mBridgeLoggedFrames=0;
++    uint32_t mBridgeWidth=0, mBridgeHeight=0;
++    sp<ICameraDeviceCallback> mBridgeCallback;
++    std::vector<std::shared_ptr<BridgePool>> mBridgePools;
++    std::set<uint32_t> mBridgeMemoryIds;
++    void retireBridge();
++    void drainBridge();
++    void cleanupBridgeIdlePools(bool closing);
++    bool releaseBridgeFrame(uint32_t id,uint32_t index);
++    void bridgeTimestamp(nsecs_t timestamp,int32_t message,const camera_memory_t* data,unsigned index);
++
+     bool mMetadataMode = false;
+ 
+     mutable Mutex mBatchLock;
+diff --git a/camera/device/1.0/default/GtexRecordingBridge.h b/camera/device/1.0/default/GtexRecordingBridge.h
+new file mode 100644
+index 0000000..f2b2ed7
+--- /dev/null
++++ b/camera/device/1.0/default/GtexRecordingBridge.h
+@@ -0,0 +1,29 @@
++#pragma once
++#include <stddef.h>
++#include <stdint.h>
++#include <string.h>
++namespace gtex_recording {
++// Descriptor geometry/stride must originate from a registered producer buffer.
++inline bool nv21ToI420(const uint8_t* src, size_t srcBytes, size_t stride,
++        size_t srcWidth, size_t srcHeight, size_t cropX, size_t cropY,
++        size_t width, size_t height, uint8_t* dst, size_t dstBytes) {
++    if (!src || !dst || !width || !height || width > 1280 || height > 720 ||
++            !srcWidth || !srcHeight || srcWidth > 4096 || srcHeight > 4096 ||
++            ((stride|srcWidth|srcHeight|cropX|cropY|width|height)&1) ||
++            stride < srcWidth || stride > 8192 || cropX > srcWidth || cropY > srcHeight ||
++            width > srcWidth-cropX || height > srcHeight-cropY) return false;
++    const size_t sourceSize = stride * srcHeight * 3 / 2;
++    const size_t outputSize = width * height * 3 / 2;
++    if (srcBytes < sourceSize || dstBytes < outputSize) return false;
++    for (size_t y=0;y<height;++y)
++        memcpy(dst+y*width,src+(cropY+y)*stride+cropX,width);
++    uint8_t* u=dst+width*height;
++    uint8_t* v=u+width*height/4;
++    const uint8_t* vu=src+stride*srcHeight+(cropY/2)*stride+cropX;
++    for (size_t y=0;y<height/2;++y) for (size_t x=0;x<width/2;++x) {
++        v[y*(width/2)+x]=vu[y*stride+2*x];
++        u[y*(width/2)+x]=vu[y*stride+2*x+1];
++    }
++    return true;
++}
++} // namespace gtex_recording

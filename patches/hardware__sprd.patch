@@ -1,0 +1,1071 @@
+diff --git a/audio/sc8830/Android.mk b/audio/sc8830/Android.mk
+index 80f702b..32114bc 100644
+--- a/audio/sc8830/Android.mk
++++ b/audio/sc8830/Android.mk
+@@ -19,6 +19,8 @@ ifeq ($(strip $(BOARD_USES_TINYALSA_AUDIO)),true)
+ include $(CLEAR_VARS)
+ 
+ LOCAL_MODULE := audio.primary.$(TARGET_BOARD_PLATFORM)
++# Android Q replaces per-file .arm suffixes with module ARM mode.
++LOCAL_ARM_MODE := arm
+ 
+ LOCAL_MODULE_RELATIVE_PATH := hw
+ 
+@@ -64,8 +66,8 @@ LOCAL_C_INCLUDES += \
+ 
+ LOCAL_SRC_FILES := \
+ 	audio_hw.c \
+-	record_process/aud_proc_config.c.arm \
+-	record_process/aud_filter_calc.c.arm \
++	record_process/aud_proc_config.c \
++	record_process/aud_filter_calc.c \
+ 
+ ifeq ($(AUDIO_MUX_PIPE),true)
+ LOCAL_SRC_FILES += audio_mux_pcm.c
+@@ -101,6 +103,7 @@ LOCAL_REQUIRED_MODULES := \
+ 
+ LOCAL_MODULE_TAGS := optional
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ include $(call all-makefiles-under,$(LOCAL_PATH))
+diff --git a/audio/sc8830/DumpData/Android.mk b/audio/sc8830/DumpData/Android.mk
+index 711b72f..90dd769 100644
+--- a/audio/sc8830/DumpData/Android.mk
++++ b/audio/sc8830/DumpData/Android.mk
+@@ -31,6 +31,7 @@ LOCAL_MODULE:= libdumpdata
+ 
+ LOCAL_MODULE_TAGS := optional
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ 
+diff --git a/audio/sc8830/at_commands_generic.c b/audio/sc8830/at_commands_generic.c
+index 1fd7d82..e46266a 100644
+--- a/audio/sc8830/at_commands_generic.c
++++ b/audio/sc8830/at_commands_generic.c
+@@ -90,11 +90,11 @@ int do_cmd_dual(int modemId, int simId, struct tiny_audio_device *adev)
+     }
+     for(indx=0;indx < dirty_count;indx++){
+         cmd_bit = cmd_queue_pri[dirty_count-indx-1];
+-        ALOGD("do_cmd_dual Switch incall AT command [%d][%d][%s][%d] ", modemId,simId,&(process_at_cmd.at_cmd[cmd_bit]),cmd_bit);
+-        adev->routeDev = at_cmd_routeDev(adev,&(process_at_cmd.at_cmd[cmd_bit]),&process_at_cmd);
++        ALOGD("do_cmd_dual Switch incall AT command [%d][%d][%s][%d] ", modemId,simId,process_at_cmd.at_cmd[cmd_bit],cmd_bit);
++        adev->routeDev = at_cmd_routeDev(adev,process_at_cmd.at_cmd[cmd_bit],&process_at_cmd);
+         char resp[AT_RESPONSE_LEN] = { 0 };
+-        int ret = send_at_wrapper(resp, AT_RESPONSE_LEN, simId, &(process_at_cmd.at_cmd[cmd_bit]));
+-        ALOGD("do_cmd_dual Switch incall AT command [%d][%s][%s] ", ret, &(process_at_cmd.at_cmd[cmd_bit]), resp);
++        int ret = send_at_wrapper(resp, AT_RESPONSE_LEN, simId, process_at_cmd.at_cmd[cmd_bit]);
++        ALOGD("do_cmd_dual Switch incall AT command [%d][%s][%s] ", ret, process_at_cmd.at_cmd[cmd_bit], resp);
+     }
+     return 0;
+ }
+diff --git a/audio/sc8830/mmi_audio_loop.c b/audio/sc8830/mmi_audio_loop.c
+index 6e72586..0f20888 100644
+--- a/audio/sc8830/mmi_audio_loop.c
++++ b/audio/sc8830/mmi_audio_loop.c
+@@ -1,3 +1,4 @@
++#include <ctype.h>
+ #include <sys/select.h>
+ #include <fcntl.h>
+ 
+diff --git a/audio/sc8830/newapm/5.x/Android.mk b/audio/sc8830/newapm/5.x/Android.mk
+index a581e7c..e21f422 100644
+--- a/audio/sc8830/newapm/5.x/Android.mk
++++ b/audio/sc8830/newapm/5.x/Android.mk
+@@ -22,6 +22,7 @@ LOCAL_STATIC_LIBRARIES := \
+ 
+ LOCAL_MODULE := libaudiopolicymanager
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ endif
+diff --git a/audio/sc8830/newapm/6.x/Android.mk b/audio/sc8830/newapm/6.x/Android.mk
+index 41f3dad..9e57e02 100644
+--- a/audio/sc8830/newapm/6.x/Android.mk
++++ b/audio/sc8830/newapm/6.x/Android.mk
+@@ -32,6 +32,7 @@ LOCAL_STATIC_LIBRARIES := \
+ LOCAL_MODULE := libaudiopolicymanager
+ 
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ endif
+diff --git a/audio/sc8830/newapm/N.x/Android.mk b/audio/sc8830/newapm/N.x/Android.mk
+index 270dc28..8730592 100644
+--- a/audio/sc8830/newapm/N.x/Android.mk
++++ b/audio/sc8830/newapm/N.x/Android.mk
+@@ -32,6 +32,7 @@ LOCAL_STATIC_LIBRARIES := \
+ LOCAL_MODULE := libaudiopolicymanager
+ 
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ endif
+diff --git a/audio/sc8830/nv_exchange/Android.mk b/audio/sc8830/nv_exchange/Android.mk
+index 784f841..d8fabc3 100644
+--- a/audio/sc8830/nv_exchange/Android.mk
++++ b/audio/sc8830/nv_exchange/Android.mk
+@@ -48,4 +48,5 @@ LOCAL_MODULE := libnvexchange
+ 
+ LOCAL_MODULE_TAGS := optional
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/audio/sc8830/nv_exchange/string_exchange_bin.c b/audio/sc8830/nv_exchange/string_exchange_bin.c
+index 9c596b6..ccba361 100644
+--- a/audio/sc8830/nv_exchange/string_exchange_bin.c
++++ b/audio/sc8830/nv_exchange/string_exchange_bin.c
+@@ -573,7 +573,7 @@ void stringfile2nvstruct(char *filename, void *para_ptr, int lenbytes)
+                     int j = strlen("app_config_info_set\\app_config_info\\app_config_info[");
+                     if(lpFindtemp != NULL)
+                     {
+-                        sscanf(lpFindtemp+j,"%[0-9]%[^]]",data);// tested.
++                        sscanf(lpFindtemp+j,"%127[0-9]%*[^]]",data);// tested.
+                         int tmpdata = (short)atoi(data);
+                         if(strstr(lpFindtemp,"eq_switch") != NULL)//2_lpFind = strstr(lpFindtemp,"eq_switch");
+                         {
+@@ -752,7 +752,7 @@ void stringfile2nvstruct(char *filename, void *para_ptr, int lenbytes)
+                     lpFind_eq_eq = strstr(nvLine,"eq_mode_");
+                     if(lpFind_eq_eq != NULL)
+                     {
+-                        sscanf(lpFind_eq_eq,"eq_mode_%[1-9]%[^\\]",data);//tested
++                        sscanf(lpFind_eq_eq,"eq_mode_%127[1-9]%*[^\\]",data);//tested
+                         int tmpdata = atoi(data);
+                         if(strstr(lpFind_eq_eq,"agc_in_gain") != NULL)
+                         {
+@@ -797,7 +797,7 @@ void stringfile2nvstruct(char *filename, void *para_ptr, int lenbytes)
+                         lpFind_eq_eq_eq = strstr(lpFind_eq_eq,"eq_band_");
+                         if(lpFind_eq_eq_eq != NULL)
+                         {
+-                            sscanf(lpFind_eq_eq_eq,"eq_band_%[0-9]%[^\\]",data);//tested
++                            sscanf(lpFind_eq_eq_eq,"eq_band_%127[0-9]%*[^\\]",data);//tested
+                             int tmpdata_data = (short)atoi(data);
+                             if(strstr(lpFind_eq_eq_eq,"fo") != NULL)
+                             {
+diff --git a/audio/sc8830/record_process/aud_proc_config.c b/audio/sc8830/record_process/aud_proc_config.c
+index e82f5bf..c5e6733 100644
+--- a/audio/sc8830/record_process/aud_proc_config.c
++++ b/audio/sc8830/record_process/aud_proc_config.c
+@@ -22,6 +22,7 @@
+ 
+ 
+ 
++#include <string.h>
+ #include "aud_proc.h"
+ #include "aud_filter_calc.h"
+ 
+diff --git a/audio/sc8830/tinyalsautils/Android.mk b/audio/sc8830/tinyalsautils/Android.mk
+index 077145c..433dccc 100644
+--- a/audio/sc8830/tinyalsautils/Android.mk
++++ b/audio/sc8830/tinyalsautils/Android.mk
+@@ -34,4 +34,5 @@ LOCAL_MODULE_TAGS := optional
+ 
+ LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/audio/sc8830/vb_control_parameters.c b/audio/sc8830/vb_control_parameters.c
+index 6c1e297..528569b 100644
+--- a/audio/sc8830/vb_control_parameters.c
++++ b/audio/sc8830/vb_control_parameters.c
+@@ -218,7 +218,7 @@ extern int headset_no_mic();
+  * local functions definition.
+  */
+ 
+-static int read_nonblock(int fd,int8_t *buf,int bytes)
++static int read_nonblock(int fd,void *buf,int bytes)
+ {
+     int ret = 0;
+     int bytes_to_read = bytes;
+@@ -246,7 +246,7 @@ static int read_nonblock(int fd,int8_t *buf,int bytes)
+         return (bytes_to_read - bytes);
+ 
+ }
+-static int write_nonblock(int fd,int8_t *buf,int bytes)
++static int write_nonblock(int fd,const void *buf,int bytes)
+ {
+     int ret = -1;
+     int bytes_to_read = bytes;
+@@ -1537,7 +1537,7 @@ void *vbc_ctrl_voip_thread_routine(void *arg)
+     para->adev = res->adev;
+     para->vbpipe_fd = -1;
+ 
+-    memcpy(para->vbpipe, res->pipe_name,strlen(res->pipe_name)+1);
++    memcpy(para->vbpipe, res->pipe_name,strlen((const char *)res->pipe_name)+1);
+ 
+     adev = (struct tiny_audio_device *)(para->adev);
+ 
+@@ -1574,7 +1574,7 @@ RESTART:
+         int result = 0;
+         timeout.tv_sec = 5;;
+         timeout.tv_usec = 0;;
+-        ALOGW("voip1:%s, looping now...cur_timeout %x,timeout %d", para->vbpipe,cur_timeout,cur_timeout?cur_timeout->tv_sec:0);
++        ALOGW("voip1:%s, looping now...cur_timeout %p,timeout %ld", para->vbpipe,(void *)cur_timeout,cur_timeout?cur_timeout->tv_sec:0L);
+ 
+         FD_ZERO(&fds_read);
+         FD_SET(para->vbpipe_fd,&fds_read);
+@@ -1858,7 +1858,7 @@ RESTART:
+         int result;
+ 	timeout.tv_sec = 5;;
+ 	timeout.tv_usec = 0;
+-        ALOGW("voice:%s, looping now...cur_timeout %x,timeout %d", para->vbpipe,cur_timeout,cur_timeout?cur_timeout->tv_sec:0);
++        ALOGW("voice:%s, looping now...cur_timeout %p,timeout %ld", para->vbpipe,(void *)cur_timeout,cur_timeout?cur_timeout->tv_sec:0L);
+ 
+         FD_ZERO(&fds_read);
+         FD_SET(para->vbpipe_fd,&fds_read);
+@@ -2198,7 +2198,7 @@ static void * vbc_ctl_modem_monitor_routine(void *arg)
+     int cur_out_devices_l;
+     int fd = -1;
+     int numRead = 0;
+-    int buf[128] = {0};
++    char buf[512] = {0};
+     struct tiny_audio_device *adev = (struct tiny_audio_device *)arg ;
+     ALOGD("vbc_ctl_modem_monitor_routine in");
+     if( !adev) {
+diff --git a/audio/sc8830/vb_effect/Android.mk b/audio/sc8830/vb_effect/Android.mk
+index cfb8cbf..c56fcdd 100644
+--- a/audio/sc8830/vb_effect/Android.mk
++++ b/audio/sc8830/vb_effect/Android.mk
+@@ -58,6 +58,7 @@ LOCAL_MODULE := libvbeffect
+ 
+ LOCAL_MODULE_TAGS := optional
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ 
+diff --git a/audio/sc8830/vb_effect/v2/vb_effect_if.c b/audio/sc8830/vb_effect/v2/vb_effect_if.c
+index e8d5662..505354c 100644
+--- a/audio/sc8830/vb_effect/v2/vb_effect_if.c
++++ b/audio/sc8830/vb_effect/v2/vb_effect_if.c
+@@ -601,7 +601,7 @@ int create_vb_effect_params(void)
+     //read audio params from source file.
+     aud_params_ptr = get_aud_paras();
+ 
+-    ALOGI("create_vb_effect_params...start,aud_params_ptr:0x%x",aud_params_ptr);
++    ALOGI("create_vb_effect_params...start,aud_params_ptr:%p",(void *)aud_params_ptr);
+     //close fd
+     if (aud_params_ptr) {
+         ret = do_parse(aud_params_ptr, adev_get_audiomodenum4eng()*sizeof(AUDIO_TOTAL_T));
+diff --git a/audio/sc8830/vb_pga/Android.mk b/audio/sc8830/vb_pga/Android.mk
+index 420fb1a..ea08f04 100644
+--- a/audio/sc8830/vb_pga/Android.mk
++++ b/audio/sc8830/vb_pga/Android.mk
+@@ -51,4 +51,5 @@ LOCAL_MODULE := libvbpga
+ 
+ LOCAL_MODULE_TAGS := optional
+ 
++LOCAL_CFLAGS += -Wno-error=unused-label -Wno-error=unused-value -Wno-error=macro-redefined -Wno-error=missing-field-initializers -Wno-error=pointer-sign -Wno-error=incompatible-pointer-types -Wno-error=incompatible-pointer-types-discards-qualifiers -Wno-error=format -Wno-error=deprecated-declarations -Wno-error=gnu-designator -Wno-error=logical-op-parentheses -Wno-error=unused-variable -Wno-error=unused-function -Wno-error=unused-parameter -Wno-error=missing-braces -Wno-error=pointer-arith
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/audio/sc8830/vb_pga/audio_pga.c b/audio/sc8830/vb_pga/audio_pga.c
+index 9c6f17d..969cc34 100644
+--- a/audio/sc8830/vb_pga/audio_pga.c
++++ b/audio/sc8830/vb_pga/audio_pga.c
+@@ -1,3 +1,4 @@
++#include <string.h>
+ /*
+  * Copyright (C) 2012 The Android Open Source Project
+  *  Written by Ken.kuang at Spreadtrum Inc.
+diff --git a/audio/scx15/Android.mk b/audio/scx15/Android.mk
+index 0d1ebfb..41fd1a4 100644
+--- a/audio/scx15/Android.mk
++++ b/audio/scx15/Android.mk
+@@ -22,6 +22,8 @@ ifeq ($(strip $(BOARD_USES_TINYALSA_AUDIO)),true)
+ include $(CLEAR_VARS)
+ 
+ LOCAL_MODULE := audio.primary.$(TARGET_BOARD_PLATFORM)
++# Android Q replaces per-file .arm suffixes with module ARM mode.
++LOCAL_ARM_MODE := arm
+ 
+ LOCAL_MODULE_RELATIVE_PATH := hw
+ 
+@@ -53,8 +55,8 @@ LOCAL_C_INCLUDES += \
+ 
+ LOCAL_SRC_FILES := \
+ 	audio_hw.c \
+-	record_process/aud_proc_config.c.arm \
+-	record_process/aud_filter_calc.c.arm \
++	record_process/aud_proc_config.c \
++	record_process/aud_filter_calc.c \
+ 
+ ifeq ($(AUDIO_MUX_PIPE),true)
+ LOCAL_SRC_FILES += audio_mux_pcm.c
+diff --git a/gralloc/sc8830/Android.mk b/gralloc/sc8830/Android.mk
+index f835aaa..42439ec 100644
+--- a/gralloc/sc8830/Android.mk
++++ b/gralloc/sc8830/Android.mk
+@@ -48,7 +48,7 @@ LOCAL_C_INCLUDES := \
+ 	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/ \
+ 
+ LOCAL_ADDITIONAL_DEPENDENCIES += \
+-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr \
++	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp \
+ 
+ LOCAL_EXPORT_C_INCLUDE_DIRS := \
+ 	$(LOCAL_PATH) \
+diff --git a/gralloc/scx15/Android.mk b/gralloc/scx15/Android.mk
+index f835aaa..42439ec 100644
+--- a/gralloc/scx15/Android.mk
++++ b/gralloc/scx15/Android.mk
+@@ -48,7 +48,7 @@ LOCAL_C_INCLUDES := \
+ 	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/ \
+ 
+ LOCAL_ADDITIONAL_DEPENDENCIES += \
+-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr \
++	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp \
+ 
+ LOCAL_EXPORT_C_INCLUDE_DIRS := \
+ 	$(LOCAL_PATH) \
+diff --git a/gralloc/scx30g_v2/Android.mk b/gralloc/scx30g_v2/Android.mk
+index f835aaa..68917eb 100644
+--- a/gralloc/scx30g_v2/Android.mk
++++ b/gralloc/scx30g_v2/Android.mk
+@@ -36,7 +36,7 @@ SHARED_MEM_LIBS := \
+ 	libion_sprd \
+ 	libhardware
+ 
+-LOCAL_SHARED_LIBRARIES := \
++LOCAL_SHARED_LIBRARIES := libui libutils libnativewindow libsync \
+ 	liblog \
+ 	libcutils \
+ 	libGLESv1_CM \
+@@ -48,7 +48,7 @@ LOCAL_C_INCLUDES := \
+ 	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/ \
+ 
+ LOCAL_ADDITIONAL_DEPENDENCIES += \
+-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr \
++	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp \
+ 
+ LOCAL_EXPORT_C_INCLUDE_DIRS := \
+ 	$(LOCAL_PATH) \
+@@ -77,6 +77,7 @@ LOCAL_SRC_FILES := \
+ 	dump_bmp.cpp \
+ 
+ #LOCAL_CFLAGS+= -DMALI_VSYNC_EVENT_REPORT_ENABLE
++LOCAL_CFLAGS += -Wno-error=unused-variable -Wno-error=unused-function
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ endif
+diff --git a/gralloc/scx30g_v2/alloc_device.cpp b/gralloc/scx30g_v2/alloc_device.cpp
+index 30a259f..c3c0423 100644
+--- a/gralloc/scx30g_v2/alloc_device.cpp
++++ b/gralloc/scx30g_v2/alloc_device.cpp
+@@ -303,91 +303,23 @@ static int gralloc_alloc_buffer(alloc_device_t *dev, size_t size, int usage, buf
+ #ifndef TARGET_SUPPORT_ADF_DISPLAY
+ static int gralloc_alloc_framebuffer_locked(alloc_device_t *dev, size_t size, int usage, buffer_handle_t *pHandle)
+ {
+-	private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
+-
+-	// allocate the framebuffer
+-	if (m->framebuffer == NULL)
+-	{
+-		// initialize the framebuffer, the framebuffer is mapped once and forever.
+-		int err = init_frame_buffer_locked(m);
+-
+-		if (err < 0)
+-		{
+-			return err;
+-		}
+-	}
+-
+-	const uint32_t bufferMask = m->bufferMask;
+-	const uint32_t numBuffers = m->numBuffers;
+-	const size_t bufferSize = m->finfo.line_length * m->info.yres;
+-
+-	if (numBuffers == 1)
+-	{
+-		// If we have only one buffer, we never use page-flipping. Instead,
+-		// we return a regular buffer which will be memcpy'ed to the main
+-		// screen when post is called.
+-		int newUsage = (usage & ~GRALLOC_USAGE_HW_FB) | GRALLOC_USAGE_HW_2D;
+-		AERR("fallback to single buffering. Virtual Y-res too small %d", m->info.yres);
+-		return gralloc_alloc_buffer(dev, bufferSize, newUsage, pHandle);
+-	}
+-
+-	if (bufferMask >= ((1LU << numBuffers) - 1))
+-	{
+-		// We ran out of buffers.
+-		return -ENOMEM;
+-	}
+-
+-	void *vaddr = m->framebuffer->base;
+-
+-	// find a free slot
+-	for (uint32_t i = 0 ; i < numBuffers ; i++)
+-	{
+-		if ((bufferMask & (1LU << i)) == 0)
+-		{
+-			m->bufferMask |= (1LU << i);
+-			break;
+-		}
+-
+-		vaddr = (void *)((uintptr_t)vaddr + bufferSize);
+-	}
+-
+-	// The entire framebuffer memory is already mapped, now create a buffer object for parts of this memory
+-	private_handle_t *hnd = new private_handle_t(private_handle_t::PRIV_FLAGS_FRAMEBUFFER, usage, size, vaddr,
+-	        0, dup(m->framebuffer->fd), (uintptr_t)vaddr - (uintptr_t) m->framebuffer->base);
+-#if GRALLOC_ARM_UMP_MODULE
+-	hnd->ump_id = m->framebuffer->ump_id;
+-
+-	/* create a backing ump memory handle if the framebuffer is exposed as a secure ID */
+-	if ((int)UMP_INVALID_SECURE_ID != hnd->ump_id)
+-	{
+-		hnd->ump_mem_handle = (int)ump_handle_create_from_secure_id(hnd->ump_id);
+-
+-		if ((int)UMP_INVALID_MEMORY_HANDLE == hnd->ump_mem_handle)
+-		{
+-			AINF("warning: unable to create UMP handle from secure ID %i\n", hnd->ump_id);
+-		}
+-	}
+-
+-#endif
+-
+-#if GRALLOC_ARM_DMA_BUF_MODULE
+-	{
+-#ifdef FBIOGET_DMABUF
+-		struct fb_dmabuf_export fb_dma_buf;
+-
+-		if (ioctl(m->framebuffer->fd, FBIOGET_DMABUF, &fb_dma_buf) == 0)
+-		{
+-			AINF("framebuffer accessed with dma buf (fd 0x%x)\n", (int)fb_dma_buf.fd);
+-			hnd->share_fd = fb_dma_buf.fd;
+-		}
+-
+-#endif
+-	}
+-#endif
+-
+-	*pHandle = hnd;
+-
+-	return 0;
++    private_module_t *m = reinterpret_cast<private_module_t *>(dev->common.module);
++    MALI_IGNORE(size);
++    if (m->framebuffer == NULL) {
++        int err = init_frame_buffer_locked(m);
++        if (err < 0)
++            return err;
++    }
++
++    /* Allocator and composer are separate Android10 processes. Legacy fb slots
++     * cannot be exported with a valid renderable dma-buf and have local lifetime
++     * accounting. Allocate an independently owned ION target instead.
++     * fb_post reads it on CPU, so request cacheable memory; gralloc_lock/unlock
++     * already invalidate/sync the source around the copy (reference V29/V76). */
++    const size_t framebuffer_size = m->finfo.line_length * m->info.yres;
++    const int buffer_usage = (usage & ~GRALLOC_USAGE_HW_FB) |
++            GRALLOC_USAGE_HW_2D | GRALLOC_USAGE_SW_READ_RARELY;
++    return gralloc_alloc_buffer(dev, framebuffer_size, buffer_usage, pHandle);
+ }
+ 
+ static int gralloc_alloc_framebuffer(alloc_device_t *dev, size_t size, int usage, buffer_handle_t *pHandle)
+diff --git a/gralloc/scx30g_v2/framebuffer_device.cpp b/gralloc/scx30g_v2/framebuffer_device.cpp
+index 0747816..e40cd79 100644
+--- a/gralloc/scx30g_v2/framebuffer_device.cpp
++++ b/gralloc/scx30g_v2/framebuffer_device.cpp
+@@ -22,7 +22,7 @@
+ #include <stdlib.h>
+ #include <sys/ioctl.h>
+ #include <linux/fb.h>
+-#include <linux/sync.h>
++#include <sync/sync.h>
+ #include <cutils/log.h>
+ #include <cutils/atomic.h>
+ #include <cutils/properties.h>
+@@ -221,7 +221,7 @@ uint32_t dither_open(uint32_t w, uint32_t h)
+ 		fp = fopen("/sys/module/mali/parameters/gpu_freq_cur", "r");
+ 		if(fp == NULL)
+ 		{
+-			AERR( "can not open /sys/module/mali/parameters/gpu_freq_cur %x", fp);
++			AERR( "can not open /sys/module/mali/parameters/gpu_freq_cur %p", fp);
+ 			free (dither);
+ 			dither = NULL;
+ 			return 0;
+@@ -257,12 +257,12 @@ uint32_t dither_open(uint32_t w, uint32_t h)
+ 
+ void dither_close(uint32_t handle)
+ {
+-	if (NULL != handle)
++	if (0 != handle)
+ 	{
+ 		struct dither_info *dither = (struct dither_info *)handle;
+ 
+ 		img_dither_deinit(dither->alg_handle);
+-		dither->alg_handle = NULL;
++		dither->alg_handle = 0;
+ 		if(dither->fp) {
+ 			fclose(dither->fp);
+ 		}
+@@ -356,7 +356,7 @@ static bool fb_is_dither_enable(struct dither_info *dither, private_handle_t con
+ 
+ 	if(fp == NULL)
+ 	{
+-		AERR( "can not open /sys/module/mali/parameters/gpu_freq_cur %x", fp);
++		AERR( "can not open /sys/module/mali/parameters/gpu_freq_cur %p", fp);
+ 	}
+ 	else
+ 	{
+@@ -575,6 +575,15 @@ static int fb_post(struct framebuffer_device_t* dev, buffer_handle_t buffer)
+ 
+ 		m->base.unlock(&m->base, buffer);
+ 		m->base.unlock(&m->base, m->framebuffer);
++
++        /* Copying pixels alone does not latch the DPI controller (V34). */
++        m->info.yoffset = 0;
++        m->info.activate = FB_ACTIVATE_VBL;
++        if (ioctl(m->framebuffer->fd, FBIOPAN_DISPLAY, &m->info) == -1) {
++            const int err = errno;
++            AERR("FBIOPAN_DISPLAY after framebuffer copy failed: %s", strerror(err));
++            return -err;
++        }
+ 	}
+ 
+ #ifdef DEBUG_FB_POST
+@@ -917,7 +926,7 @@ static void ADF_wait(int fd)
+     }
+ 
+     __s32 to = 3000;
+-    int err = ioctl(fd, SYNC_IOC_WAIT, &to);
++    int err = sync_wait(fd, to);
+     if (err < 0 && errno == ETIME) {
+         ALOGW("gralloc::adf_device_post: wait release fence %d timeout in %u ms", fd, to);
+     }
+diff --git a/gralloc/scx30g_v2/gralloc_priv.h b/gralloc/scx30g_v2/gralloc_priv.h
+index 4c50211..418a46c 100644
+--- a/gralloc/scx30g_v2/gralloc_priv.h
++++ b/gralloc/scx30g_v2/gralloc_priv.h
+@@ -20,6 +20,7 @@
+ #define GRALLOC_PRIV_H_
+ 
+ #include <stdint.h>
++#include <string.h>
+ #include <pthread.h>
+ #include <errno.h>
+ #include <linux/fb.h>
+diff --git a/hwcomposer/Android.mk b/hwcomposer/Android.mk
+index afcef76..20ded78 100644
+--- a/hwcomposer/Android.mk
++++ b/hwcomposer/Android.mk
+@@ -23,7 +23,7 @@ ifeq ($(strip $(USE_SPRD_HWCOMPOSER)),true)
+ include $(CLEAR_VARS)
+ 
+ LOCAL_MODULE_RELATIVE_PATH := hw
+-LOCAL_SHARED_LIBRARIES := liblog libEGL libmemion libutils libcutils libGLESv1_CM libGLESv2 libhardware libui libsync \
++LOCAL_SHARED_LIBRARIES := libnativewindow liblog libEGL libmemion libutils libcutils libGLESv1_CM libGLESv2 libhardware libui libsync \
+ 	libHWCUtils \
+ 
+ LOCAL_SRC_FILES := SprdHWComposer.cpp \
+@@ -48,7 +48,7 @@ LOCAL_C_INCLUDES := \
+ 	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include/video \
+ 
+ LOCAL_ADDITIONAL_DEPENDENCIES += \
+-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr \
++	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp \
+ 
+ LOCAL_C_INCLUDES += \
+ 	$(TOP)/hardware/sprd/libgpu/include \
+@@ -194,6 +194,8 @@ ifeq ($(strip $(TARGET_DEBUG_CAMERA_SHAKE_TEST)), true)
+ endif
+ 
+ LOCAL_MODULE_TAGS := optional
++LOCAL_SRC_FILES := $(filter-out %.h %.hpp,$(LOCAL_SRC_FILES))
++LOCAL_CFLAGS += -Wno-error=unused-parameter -Wno-error=unused-variable -Wno-error=unused-private-field -Wno-error=unused-function -Wno-error=gnu-designator
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ endif
+diff --git a/hwcomposer/OverlayComposer/Layer.cpp b/hwcomposer/OverlayComposer/Layer.cpp
+index 7b39c5a..4d5fd83 100644
+--- a/hwcomposer/OverlayComposer/Layer.cpp
++++ b/hwcomposer/OverlayComposer/Layer.cpp
+@@ -165,7 +165,7 @@ bool Layer::wrapGraphicBuffer()
+     getSizeStride(mPrivH->width, mPrivH->height, mPrivH->format, size, stride);
+ 
+     mGFXBuffer = new GraphicBuffer(mPrivH->width, mPrivH->height,
+-                                   mPrivH->format, GraphicBuffer::USAGE_HW_TEXTURE,
++                                   mPrivH->format, 1, GraphicBuffer::USAGE_HW_TEXTURE,
+                                    stride,
+                                    (native_handle_t*)mPrivH, false);
+     if (mGFXBuffer->initCheck() != NO_ERROR)
+diff --git a/hwcomposer/OverlayComposer/OverlayNativeWindow.h b/hwcomposer/OverlayComposer/OverlayNativeWindow.h
+index 336a515..85de9d9 100644
+--- a/hwcomposer/OverlayComposer/OverlayNativeWindow.h
++++ b/hwcomposer/OverlayComposer/OverlayNativeWindow.h
+@@ -33,6 +33,7 @@
+ #ifndef _OVERLAY_NATIVEWINDOW_H_
+ #define _OVERLAY_NATIVEWINDOW_H_
+ 
++#include <system/window.h>
+ #include <ui/ANativeObjectBase.h>
+ #include <ui/Fence.h>
+ #include "gralloc_priv.h"
+@@ -58,6 +59,7 @@ public:
+         ANativeWindowBuffer::width  = w;
+         ANativeWindowBuffer::height = h;
+         ANativeWindowBuffer::format = f;
++        ANativeWindowBuffer::layerCount = 1;
+         ANativeWindowBuffer::usage  = u;
+     }
+ private:
+diff --git a/hwcomposer/SprdDisplayPlane.cpp b/hwcomposer/SprdDisplayPlane.cpp
+index c96f66b..6279fd9 100644
+--- a/hwcomposer/SprdDisplayPlane.cpp
++++ b/hwcomposer/SprdDisplayPlane.cpp
+@@ -103,7 +103,7 @@ private_handle_t* SprdDisplayPlane:: createPlaneBuffer(int index)
+         return NULL;
+     }
+ 
+-    GraphicBufferAllocator::get().allocate(mWidth, mHeight, mFormat, mPlaneUsage, (buffer_handle_t*)&BufHandle, &stride, getUniqueId(), std::move("HWC"));
++    GraphicBufferAllocator::get().allocate(mWidth, mHeight, mFormat, 1, mPlaneUsage, (buffer_handle_t*)&BufHandle, &stride, getUniqueId(), std::move("HWC"));
+     if (BufHandle == NULL)
+     {
+         ALOGE("SprdDisplayPlane cannot alloc buffer");
+diff --git a/hwcomposer/SprdHWComposer.cpp b/hwcomposer/SprdHWComposer.cpp
+index c6c60d9..e432b2d 100644
+--- a/hwcomposer/SprdHWComposer.cpp
++++ b/hwcomposer/SprdHWComposer.cpp
+@@ -479,6 +479,7 @@ int SprdHWComposer:: setCursorPositionAsync(int disp, int x_pos, int y_pos)
+             break;
+         case DISPLAY_VIRTUAL:
+             ret = mVirtualDisplay->setCursorPositionAsync(x_pos, y_pos);
++            break;
+         case DISPLAY_EXTERNAL:
+             if (mDisplayAttributes[DISPLAY_EXTERNAL].connected)
+             {
+diff --git a/hwcomposer/SprdPrimaryDisplayDevice/SprdHWLayerList.cpp b/hwcomposer/SprdPrimaryDisplayDevice/SprdHWLayerList.cpp
+index 2d90055..19fb216 100644
+--- a/hwcomposer/SprdPrimaryDisplayDevice/SprdHWLayerList.cpp
++++ b/hwcomposer/SprdPrimaryDisplayDevice/SprdHWLayerList.cpp
+@@ -1060,7 +1060,7 @@ int SprdHWLayerList::prepareForGXP(SprdHWLayer *l)
+         //for scaler input > 4x4
+         if((srcWidth <= 4) || (srcHeight <= 4))
+         {
+-            ALOGI_IF(mDebugFlag,"prepareForGXP[%d], GXP do not support scaling input <= 4x4 ! %d",__LINE__);
++            ALOGI_IF(mDebugFlag,"prepareForGXP[%d], GXP do not support scaling input <= 4x4 !",__LINE__);
+             l->setLayerAccelerator(ACCELERATOR_OVERLAYCOMPOSER);
+             return 1;
+         }
+@@ -1069,7 +1069,7 @@ int SprdHWLayerList::prepareForGXP(SprdHWLayer *l)
+     //for blend require the rect's height >= 32
+     if((destHeight < 32) || (srcWidth < 32) || (srcHeight < 32))
+     {
+-        ALOGI_IF(mDebugFlag,"prepareForGXP[%d], GXP do not support blend with rect height < 32 ! %d",__LINE__);
++        ALOGI_IF(mDebugFlag,"prepareForGXP[%d], GXP do not support blend with rect height < 32 !",__LINE__);
+         l->setLayerAccelerator(ACCELERATOR_OVERLAYCOMPOSER);
+         return 1;
+     }
+diff --git a/hwcomposer/SprdUtil.cpp b/hwcomposer/SprdUtil.cpp
+index 9d0515e..c49299c 100644
+--- a/hwcomposer/SprdUtil.cpp
++++ b/hwcomposer/SprdUtil.cpp
+@@ -1122,9 +1122,9 @@ AllocGFXBuffer:
+     }
+ 
+     if(mGsp_cap.buf_type_support == GSP_ADDR_TYPE_PHYSICAL) {
+-      GraphicBufferAllocator::get().allocate(width, height, format, GRALLOC_USAGE_OVERLAY_BUFFER, (buffer_handle_t*)&tmpBuffer, &stride, getUniqueId(), std::move("HWC"));
++      GraphicBufferAllocator::get().allocate(width, height, format, 1, GRALLOC_USAGE_OVERLAY_BUFFER, (buffer_handle_t*)&tmpBuffer, &stride, getUniqueId(), std::move("HWC"));
+     } else if(mGsp_cap.buf_type_support == GSP_ADDR_TYPE_IOVIRTUAL) {
+-      GraphicBufferAllocator::get().allocate(width, height, format, 0, (buffer_handle_t*)&tmpBuffer, &stride, getUniqueId(), std::move("HWC"));
++      GraphicBufferAllocator::get().allocate(width, height, format, 1, 0, (buffer_handle_t*)&tmpBuffer, &stride, getUniqueId(), std::move("HWC"));
+     }
+ 
+     if (tmpBuffer == NULL) {
+@@ -1279,11 +1279,11 @@ int SprdUtil::gsp_process_va_copy2_pa(GSP_CONFIG_INFO_T *pgsp_cfg_info)
+     if(copyTempBuffer == NULL) {
+         //GraphicBufferAllocator::get().alloc(mFBInfo->fb_width, mFBInfo->fb_height, format, GRALLOC_USAGE_OVERLAY_BUFFER, (buffer_handle_t*)&copyTempBuffer, &stride);
+         if(OSD_MAX_WIDTH*OSD_MAX_HEIGHT*4 > VIDEO_MAX_WIDTH*VIDEO_MAX_HEIGHT*1.5) {
+-          GraphicBufferAllocator::get().allocate(OSD_MAX_WIDTH, OSD_MAX_HEIGHT, HAL_PIXEL_FORMAT_RGBA_8888,
++          GraphicBufferAllocator::get().allocate(OSD_MAX_WIDTH, OSD_MAX_HEIGHT, HAL_PIXEL_FORMAT_RGBA_8888, 1,
+           GRALLOC_USAGE_OVERLAY_BUFFER, (buffer_handle_t*)&copyTempBuffer,
+           &stride, getUniqueId(), std::move("HWC"));
+       } else {
+-          GraphicBufferAllocator::get().allocate(VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, HAL_PIXEL_FORMAT_YCbCr_420_SP,
++          GraphicBufferAllocator::get().allocate(VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, HAL_PIXEL_FORMAT_YCbCr_420_SP, 1,
+           GRALLOC_USAGE_OVERLAY_BUFFER, (buffer_handle_t*)&copyTempBuffer,
+           &stride, getUniqueId(), std::move("HWC"));
+       }
+diff --git a/hwcomposer/SprdVirtualDisplayDevice/SprdWIDIBlit.cpp b/hwcomposer/SprdVirtualDisplayDevice/SprdWIDIBlit.cpp
+index 35d74f3..2581ea3 100644
+--- a/hwcomposer/SprdVirtualDisplayDevice/SprdWIDIBlit.cpp
++++ b/hwcomposer/SprdVirtualDisplayDevice/SprdWIDIBlit.cpp
+@@ -775,7 +775,7 @@ sp<GraphicBuffer> SprdWIDIBlit:: wrapGraphicsBuffer(private_handle_t *handle)
+     }
+ 
+     GFXBuffer = new GraphicBuffer(handle->width, handle->height, handle->format,
+-                               GraphicBuffer::USAGE_HW_TEXTURE, handle->stride,
++                               1, GraphicBuffer::USAGE_HW_TEXTURE, handle->stride,
+                                (native_handle_t *)handle, false);
+     if (GFXBuffer->initCheck() != NO_ERROR)
+     {
+diff --git a/hwcomposer/sc8830/Android.mk b/hwcomposer/sc8830/Android.mk
+index 89ee48c..a099b53 100755
+--- a/hwcomposer/sc8830/Android.mk
++++ b/hwcomposer/sc8830/Android.mk
+@@ -30,12 +30,14 @@ ifeq ($(strip $(DEVICE_WITH_GSP)),true)
+ include $(CLEAR_VARS)
+ 
+ LOCAL_MODULE := sprd_gsp.$(TARGET_BOARD_PLATFORM)
++LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp
+ LOCAL_MODULE_RELATIVE_PATH := hw
+ 
+ LOCAL_SHARED_LIBRARIES := liblog
+ LOCAL_SRC_FILES := gsp_hal.cpp
+ 
+-LOCAL_CFLAGS:= -DLOG_TAG=\"GSPHAL\"
++LOCAL_CFLAGS := -Wno-error=unused-variable -Wno-error=gnu-designator
++LOCAL_CFLAGS += -DLOG_TAG=\"GSPHAL\"
+ 
+ #/home/apuser/work/shark_android2/device/sprd/common/libs/mali/src/ump/include/ump/ump.h
+ MALI_DDK_PATH := device/sprd/common/libs
+@@ -44,6 +46,7 @@ LOCAL_C_INCLUDES += \
+ 	$(TOP)/hardware/sprd/libgpu/include \
+ 
+ LOCAL_MODULE_TAGS := optional
++LOCAL_SRC_FILES := $(filter-out %.h %.hpp,$(LOCAL_SRC_FILES))
+ include $(BUILD_SHARED_LIBRARY)
+ 
+ endif
+diff --git a/iwnpi/Android.mk b/iwnpi/Android.mk
+index 605c0c0..a17c340 100755
+--- a/iwnpi/Android.mk
++++ b/iwnpi/Android.mk
+@@ -24,7 +24,11 @@ LOCAL_C_INCLUDES += external/libnl/include
+ LOCAL_SHARED_LIBRARIES += libcutils   \
+                           libutils
+ 
++ifeq ($(TARGET_DEVICE),gtexswifi)
++LOCAL_MODULE := libiwnpi_source_unused
++else
+ LOCAL_MODULE := libiwnpi
++endif
+ LOCAL_MODULE_TAGS := optional
+ LOCAL_STATIC_LIBRARIES += libnl
+ include $(BUILD_SHARED_LIBRARY)
+@@ -47,7 +51,7 @@ LIBSS_CFLAGS += -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+ INCLUDES += external/libnl/include
+ 
+ LOCAL_MODULE = libsprdftms
+-LOCAL_MODULE_TAGS = debug
++LOCAL_MODULE_TAGS = optional
+ LOCAL_CFLAGS = $(LIBSS_CFLAGS)
+ LOCAL_SRC_FILES = $(LIBSS_OBJS)
+ LOCAL_C_INCLUDES = $(INCLUDES)
+diff --git a/libdither/Android.mk b/libdither/Android.mk
+index edda5a4..5ace163 100644
+--- a/libdither/Android.mk
++++ b/libdither/Android.mk
+@@ -43,12 +43,8 @@ LOCAL_EXPORT_C_INCLUDE_DIRS := \
+ LOCAL_SRC_FILES := \
+ 	image_dither.cpp \
+ 
+-LOCAL_SHARED_LIBRARIES := \
+-	libutils \
+-	libcutils \
+-	libbinder \
+-	libdl \
+-	libandroid_runtime \
+-	liblog \
++# Only Timers/log APIs are used; avoid loading the Java runtime into gralloc.
++LOCAL_SHARED_LIBRARIES := libutils liblog
++LOCAL_CFLAGS += -Wno-error=unused-variable -Wno-error=unused-parameter
+ 
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/libdither/image_dither.cpp b/libdither/image_dither.cpp
+index 09a9108..8e7b231 100644
+--- a/libdither/image_dither.cpp
++++ b/libdither/image_dither.cpp
+@@ -846,7 +846,7 @@ static void dither_four_block(uint32_t *src_ptr[4], uint16_t *offset_tbl[4])
+     uint32_t mask[4] = {0xfff8fcf8, 0xfff8fcf8, 0xfff8fcf8, 0xfff8fcf8};
+ 
+     uint8x16_t  v_src_u8x16;
+-    uint32x4_t  v_src_u32x4;
++    uint32x4_t  v_src_u32x4 = vdupq_n_u32(0);
+ 
+     uint16x8_t  v_src_low_u16x8;
+     uint16x8_t  v_src_high_u16x8;
+diff --git a/libion_sprd/sc8830/Android.mk b/libion_sprd/sc8830/Android.mk
+index 095242f..04d28d2 100644
+--- a/libion_sprd/sc8830/Android.mk
++++ b/libion_sprd/sc8830/Android.mk
+@@ -22,7 +22,7 @@ include $(CLEAR_VARS)
+ LOCAL_MODULE := libion_sprd
+ 
+ LOCAL_ADDITIONAL_DEPENDENCIES += \
+-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
++	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp
+ 
+ LOCAL_C_INCLUDES += \
+ 	$(LOCAL_PATH)/include \
+@@ -51,7 +51,7 @@ include $(CLEAR_VARS)
+ LOCAL_MODULE := iontest_sprd
+ 
+ LOCAL_ADDITIONAL_DEPENDENCIES += \
+-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
++	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp
+ 
+ LOCAL_C_INCLUDES += \
+ 	$(LOCAL_PATH)/include \
+diff --git a/libion_sprd/sc8830/include/ion/ion.h b/libion_sprd/sc8830/include/ion/ion.h
+index d276b16..3ddf22d 100644
+--- a/libion_sprd/sc8830/include/ion/ion.h
++++ b/libion_sprd/sc8830/include/ion/ion.h
+@@ -28,6 +28,7 @@ __BEGIN_DECLS
+ 
+ struct ion_handle;
+ 
++int ion_is_legacy(int fd);
+ int ion_open();
+ int ion_close(int fd);
+ int ion_alloc(int fd, size_t len, size_t align, unsigned int heap_mask,
+diff --git a/libion_sprd/sc8830/ion.c b/libion_sprd/sc8830/ion.c
+index 76d5ec1..f301c2e 100644
+--- a/libion_sprd/sc8830/ion.c
++++ b/libion_sprd/sc8830/ion.c
+@@ -31,6 +31,13 @@
+ #include <linux/ion.h>
+ #include <ion/ion.h>
+ 
++/* Android10 Codec2 queries the legacy ION ABI before allocating. */
++int ion_is_legacy(int fd)
++{
++    (void)fd;
++    return 1;
++}
++
+ int ion_open()
+ {
+     int fd = open("/dev/ion", O_RDWR);
+diff --git a/libion_sprd/scx15/Android.mk b/libion_sprd/scx15/Android.mk
+index b9c7e1b..3345ef8 100644
+--- a/libion_sprd/scx15/Android.mk
++++ b/libion_sprd/scx15/Android.mk
+@@ -22,7 +22,7 @@ include $(CLEAR_VARS)
+ LOCAL_MODULE := libion_sprd
+ 
+ LOCAL_ADDITIONAL_DEPENDENCIES += \
+-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
++	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp
+ 
+ LOCAL_C_INCLUDES += \
+ 	$(LOCAL_PATH)/include \
+@@ -52,7 +52,7 @@ include $(CLEAR_VARS)
+ LOCAL_MODULE := iontest_sprd
+ 
+ LOCAL_ADDITIONAL_DEPENDENCIES += \
+-	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
++	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp
+ 
+ LOCAL_C_INCLUDES += \
+ 	$(LOCAL_PATH)/include \
+diff --git a/liblights/Android.mk b/liblights/Android.mk
+index fab104b..80f23f6 100644
+--- a/liblights/Android.mk
++++ b/liblights/Android.mk
+@@ -25,4 +25,5 @@ LOCAL_MODULE_RELATIVE_PATH := hw
+ LOCAL_SHARED_LIBRARIES := liblog
+ LOCAL_MODULE := lights.$(TARGET_BOARD_PLATFORM)
+ LOCAL_MODULE_TAGS := optional
++LOCAL_CFLAGS += -Wno-error=unused-variable -Wno-error=unused-parameter -Wno-error=gnu-designator
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/liblights/lights.c b/liblights/lights.c
+index a2dd827..b13058f 100644
+--- a/liblights/lights.c
++++ b/liblights/lights.c
+@@ -1,3 +1,4 @@
++#include <stdlib.h>
+ /*
+  * Copyright (C) 2008 The Android Open Source Project
+  *
+diff --git a/libmemion/Android.mk b/libmemion/Android.mk
+index 591b1ea..5451a13 100644
+--- a/libmemion/Android.mk
++++ b/libmemion/Android.mk
+@@ -15,4 +15,6 @@ LOCAL_SHARED_LIBRARIES :=       \
+ LOCAL_MODULE := libmemion
+ LOCAL_MODULE_TAGS := optional
+ 
++LOCAL_CFLAGS += -Wno-error=unused-variable
++LOCAL_ADDITIONAL_DEPENDENCIES += $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/.sprd_headers.stamp
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/libmemion/MemoryHeapIon.cpp b/libmemion/MemoryHeapIon.cpp
+index f3b53d3..8f12899 100644
+--- a/libmemion/MemoryHeapIon.cpp
++++ b/libmemion/MemoryHeapIon.cpp
+@@ -28,6 +28,7 @@
+ #include <sys/mman.h>
+ 
+ #include <cutils/log.h>
++#include <cutils/atomic.h>
+ 
+ #include <linux/ion.h>
+ 
+diff --git a/libmemtrack/Android.mk b/libmemtrack/Android.mk
+index 5a341ec..70976be 100644
+--- a/libmemtrack/Android.mk
++++ b/libmemtrack/Android.mk
+@@ -32,4 +32,5 @@ LOCAL_SRC_FILES := \
+ 
+ LOCAL_MODULE := memtrack.$(TARGET_BOARD_PLATFORM)
+ 
++LOCAL_CFLAGS += -Wno-error=unused-variable -Wno-error=unused-parameter -Wno-error=gnu-designator
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/libmemtrack/sprd_mem_check.c b/libmemtrack/sprd_mem_check.c
+index 2b90532..c75f649 100644
+--- a/libmemtrack/sprd_mem_check.c
++++ b/libmemtrack/sprd_mem_check.c
+@@ -105,7 +105,7 @@ int sprd_check_memory(pid_t pid, enum memtrack_type type,
+ 		if (ret != 2) {
+ 			continue;
+ 		}
+-		ALOGV("sprd_check_memory read line from gl ,pid:%d, size:%x",pid_gl,size);
++		ALOGV("sprd_check_memory read line from gl ,pid:%u, size:%lx",pid_gl,size);
+ 		if (pid_gl !=(unsigned int)pid)
+ 			continue;
+ 
+diff --git a/vpu/mmf/openmax/libomxil-bellagio-0.9.3/Android.mk b/vpu/mmf/openmax/libomxil-bellagio-0.9.3/Android.mk
+index 90d7b27..90af26d 100644
+--- a/vpu/mmf/openmax/libomxil-bellagio-0.9.3/Android.mk
++++ b/vpu/mmf/openmax/libomxil-bellagio-0.9.3/Android.mk
+@@ -8,7 +8,7 @@ LOCAL_SRC_FILES := \
+ 	src/omxregister.c \
+ 	src/omxregister.h
+ 
+-LOCAL_MODULE_TAGS := eng
++LOCAL_MODULE_TAGS := optional
+ LOCAL_MODULE := omxregister-bellagio
+ 
+ LOCAL_CFLAGS := -DOMXILCOMPONENTSPATH=\"/system/lib\" -DCONFIG_DEBUG_LEVEL=0
+@@ -22,6 +22,7 @@ LOCAL_SHARED_LIBRARIES :=       \
+         libdl			\
+ 	liblog
+ 
++LOCAL_SRC_FILES := $(filter-out %.h %.hpp,$(LOCAL_SRC_FILES))
+ include $(BUILD_EXECUTABLE)
+ 
+ # Building the libomxil-bellagio
+@@ -51,7 +52,7 @@ LOCAL_SRC_FILES := \
+ 	src/base/omx_base_video_port.c \
+ 	src/core_extensions/OMXCoreRMExt.c
+ 
+-LOCAL_MODULE_TAGS := eng
++LOCAL_MODULE_TAGS := optional
+ LOCAL_MODULE := libomxil-bellagio
+ 
+ LOCAL_CFLAGS :=  -DOMXILCOMPONENTSPATH=\"/system/lib\" -DCONFIG_DEBUG_LEVEL=0 -DCNM_SPRD_PLATFORM
+@@ -102,5 +103,6 @@ src/queue.h \
+ src/content_pipe_inet.h \
+ test/components/common/user_debug_levels.h
+ 
++LOCAL_SRC_FILES := $(filter-out %.h %.hpp,$(LOCAL_SRC_FILES))
+ include $(BUILD_SHARED_LIBRARY)
+ 
+diff --git a/vpu/mmf/openmax/omxil-vpu-component/Android.mk b/vpu/mmf/openmax/omxil-vpu-component/Android.mk
+index 68c2cef..fdd2260 100644
+--- a/vpu/mmf/openmax/omxil-vpu-component/Android.mk
++++ b/vpu/mmf/openmax/omxil-vpu-component/Android.mk
+@@ -14,7 +14,7 @@ LOCAL_CFLAGS := -DCONFIG_DEBUG_LEVEL=15 -DANDROID_PLATFORM_SDK_VERSION=$(PLATFOR
+ #LOCAL_CFLAGS += -DCNM_FPGA_PLATFORM
+ #LOCAL_CFLAGS += -DCNM_FPGA_CTS_TEST
+ 
+-LOCAL_MODULE_TAGS := eng
++LOCAL_MODULE_TAGS := optional
+ LOCAL_MODULE := libomxvpu
+ 
+ #LOCAL_STATIC_LIBRARIES := libyuv_static
+@@ -57,4 +57,5 @@ LOCAL_COPY_HEADERS_TO := ./bellagio
+ LOCAL_COPY_HEADERS := src/OMX_VPU_Index.h			\
+ 			src/OMX_VPU_Video.h
+ 
++LOCAL_SRC_FILES := $(filter-out %.h %.hpp,$(LOCAL_SRC_FILES))
+ include $(BUILD_SHARED_LIBRARY)
+diff --git a/vpu/vpuapi/Android.mk b/vpu/vpuapi/Android.mk
+index 76b64f9..284dd6d 100644
+--- a/vpu/vpuapi/Android.mk
++++ b/vpu/vpuapi/Android.mk
+@@ -22,7 +22,7 @@ LOCAL_SRC_FILES := \
+ # 		../vdi/mm.c
+ 
+ 
+-LOCAL_MODULE_TAGS := eng
++LOCAL_MODULE_TAGS := optional
+ LOCAL_MODULE := libvpu
+ 
+ LOCAL_CFLAGS := -DCONFIG_DEBUG_LEVEL=255
+diff --git a/wlan/wapi_lib/Android.mk b/wlan/wapi_lib/Android.mk
+index 639e0f8..d44c6cf 100755
+--- a/wlan/wapi_lib/Android.mk
++++ b/wlan/wapi_lib/Android.mk
+@@ -19,7 +19,7 @@ LOCAL_C_INCLUDES += \
+ LOCAL_CFLAGS += -DLE -DECC_NO_ECC192_ECDH -DECC_NEED_NID_X9_62_PRIME192V4 -DASUE -DCONFIG_WAPI
+ LOCAL_CFLAGS += -Wunused-parameter -Wself-assign
+ LOCAL_MODULE:= libwapi
+-LOCAL_MODULE_TAGS := debug
++LOCAL_MODULE_TAGS := optional
+ include $(BUILD_STATIC_LIBRARY)
+ 
+ else
+@@ -28,7 +28,7 @@ include $(CLEAR_VARS)
+ LOCAL_ARM_MODE := arm
+ LOCAL_SRC_FILES := libwapi.a
+ LOCAL_MODULE:= libwapi
+-LOCAL_MODULE_TAGS := debug
++LOCAL_MODULE_TAGS := optional
+ LOCAL_MODULE_SUFFIX := .a
+ LOCAL_MODULE_CLASS := STATIC_LIBRARIES
+ include $(BUILD_PREBUILT)
+diff --git a/wpa_supplicant_8_lib/driver_cmd_nl80211.c b/wpa_supplicant_8_lib/driver_cmd_nl80211.c
+index 630254e..df7dd0f 100644
+--- a/wpa_supplicant_8_lib/driver_cmd_nl80211.c
++++ b/wpa_supplicant_8_lib/driver_cmd_nl80211.c
+@@ -389,7 +389,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
+       ret = os_snprintf(buf, buf_len, "OK");
+     } else if (os_strncasecmp(cmd, "WHITE_ADD", 9) == 0) {
+       wpa_printf(MSG_INFO, "%s", cmd);
+-      char addr[ETH_ALEN];
++      u8 addr[ETH_ALEN];
+       hwaddr_aton(cmd+10, addr);
+       add = 1;
+       i = 0;
+@@ -420,7 +420,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
+       ret = os_snprintf(buf, buf_len, "OK");
+     } else if (os_strncasecmp(cmd, "WHITE_DEL", 9) == 0 ) {
+       wpa_printf(MSG_INFO, "%s", cmd);
+-      char addr[ETH_ALEN];
++      u8 addr[ETH_ALEN];
+       hwaddr_aton(cmd+10, addr);
+       i = 0;
+       acl = hostapd->conf->accept_mac;
+@@ -500,7 +500,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
+         ret = os_snprintf(buf, buf_len, "OK");
+     } else if (os_strncasecmp(cmd, "BLOCK ", 6) == 0) {
+         u8 mac_addr[ETH_ALEN];
+-        if(sscanf(cmd+6, MACSTR, &mac_addr[0], &mac_addr[1], &mac_addr[2], &mac_addr[3], &mac_addr[4], &mac_addr[5]) != 6)
++        if (hwaddr_aton(cmd+6, mac_addr) < 0)
+             return -1;
+         if(android_priv_cmd(priv, cmd) < 0)
+             return -1;
+@@ -509,7 +509,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
+         ret = os_snprintf(buf, buf_len, "OK");
+     } else if (os_strncasecmp(cmd, "UNBLOCK ", 8) == 0) {
+         u8 mac_addr[ETH_ALEN];
+-        if(sscanf(cmd+8, MACSTR, &mac_addr[0], &mac_addr[1], &mac_addr[2], &mac_addr[3], &mac_addr[4], &mac_addr[5]) != 6)
++        if (hwaddr_aton(cmd+8, mac_addr) < 0)
+             return -1;
+         if(android_priv_cmd(priv, cmd) < 0)
+             return -1;
+@@ -587,8 +587,8 @@ int wpa_driver_nl80211_driver_cmd_wnm(void *priv, enum wnm_oper oper,
+   if ((ret = ioctl(drv->global->ioctl_sock, SIOCDEVPRIVATE + 1, &ifr)) < 0) {
+     wpa_printf(MSG_ERROR, "%s: failed to issue private commands\n", __func__);
+   } else {
+-    wpa_printf(MSG_DEBUG, "%s %s len = %d, %d", __func__, buf, ret,
+-               strlen(buf));
++    wpa_printf(MSG_DEBUG, "%s %s len = %d, %zu", __func__, (const char *)buf, ret,
++               strlen((const char *)buf));
+   }
+ 
+   return ret;

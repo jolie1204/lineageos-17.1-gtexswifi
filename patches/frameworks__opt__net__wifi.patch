@@ -1,0 +1,110 @@
+diff --git a/libwifi_hal/Android.mk b/libwifi_hal/Android.mk
+index f8987b6..8e0f74a 100644
+--- a/libwifi_hal/Android.mk
++++ b/libwifi_hal/Android.mk
+@@ -106,6 +106,8 @@ else ifeq ($(BOARD_WLAN_DEVICE), emulator)
+   LIB_WIFI_HAL := libwifi-hal-emu
+ else ifeq ($(BOARD_WLAN_DEVICE), slsi)
+   LIB_WIFI_HAL := libwifi-hal-slsi
++else ifeq ($(BOARD_WLAN_DEVICE), sc2341)
++  LIB_WIFI_HAL := libwifi-hal-generic
+ endif
+ 
+ # The WiFi HAL that you should be linking.
+diff --git a/libwifi_hal/wifi_hal_common.cpp b/libwifi_hal/wifi_hal_common.cpp
+index 0d8e0fb..ed4519d 100644
+--- a/libwifi_hal/wifi_hal_common.cpp
++++ b/libwifi_hal/wifi_hal_common.cpp
+@@ -24,6 +24,36 @@
+ #include <cutils/misc.h>
+ #include <cutils/properties.h>
+ #include <sys/syscall.h>
++#include <cutils/sockets.h>   /* V90_WCND */
++#include <string.h>
++#include <sys/socket.h>
++
++// V90_WCND: wcnd (SPRD, Marlin/CP2) cuenta los usuarios del coprocesador. Sin este aviso cree que
++// el CP2 esta parado y lo reinicia en cada BT-OPEN/BT-CLOSE, tirando el Wi-Fi.
++static int wcnd_notify(const char *cmd) {
++  int fd = -1;
++  for (int retry = 0; retry < 20 && fd < 0; retry++) {
++    fd = socket_local_client("wcnd", ANDROID_SOCKET_NAMESPACE_ABSTRACT, SOCK_STREAM);
++    if (fd < 0) usleep(100 * 1000);
++  }
++  if (fd < 0) {
++    PLOG(ERROR) << "V90_WCND: cannot connect to wcnd for '" << cmd << "'";
++    return -1;
++  }
++  struct timeval tv = {20, 0};
++  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
++  char buf[128] = {0};
++  int ret = -1;
++  if (TEMP_FAILURE_RETRY(write(fd, cmd, strlen(cmd) + 1)) > 0) {
++    int n = TEMP_FAILURE_RETRY(read(fd, buf, sizeof(buf) - 1));
++    if (n > 0 && strstr(buf, "BTWIFI-CMD OK")) ret = 0;
++    LOG(INFO) << "V90_WCND: '" << cmd << "' -> " << n << " bytes '" << buf << "'";
++  } else {
++    PLOG(ERROR) << "V90_WCND: write failed for '" << cmd << "'";
++  }
++  close(fd);
++  return ret;
++}
+ 
+ extern "C" int init_module(void *, unsigned long, const char *);
+ extern "C" int delete_module(const char *, unsigned int);
+@@ -63,9 +93,11 @@ static int insmod(const char *filename, const char *args) {
+   }
+ 
+   ret = syscall(__NR_finit_module, fd, args, 0);
+-
++  const int load_errno = errno;
+   close(fd);
++  if (ret < 0 && load_errno == EEXIST) return 0;
+   if (ret < 0) {
++    errno = load_errno;
+     PLOG(ERROR) << "finit_module return: " << ret;
+   }
+ 
+@@ -164,6 +196,9 @@ int wifi_load_driver() {
+     return 0;
+   }
+ 
++  if (wcnd_notify("wcn WIFI-OPEN") < 0) {   /* V90_WCND */
++    LOG(WARNING) << "V90_WCND: WIFI-OPEN not acknowledged, loading driver anyway";
++  }
+   if (insmod(DRIVER_MODULE_PATH, DRIVER_MODULE_ARG) < 0) return -1;
+ #endif
+ 
+@@ -203,6 +238,7 @@ int wifi_unload_driver() {
+     }
+     usleep(500000); /* allow card removal */
+     if (count) {
++      wcnd_notify("wcn WIFI-CLOSE");   /* V90_WCND */
+       return 0;
+     }
+     return -1;
+diff --git a/service/java/com/android/server/wifi/SupplicantStaNetworkHal.java b/service/java/com/android/server/wifi/SupplicantStaNetworkHal.java
+index dd56b5f..2462da3 100644
+--- a/service/java/com/android/server/wifi/SupplicantStaNetworkHal.java
++++ b/service/java/com/android/server/wifi/SupplicantStaNetworkHal.java
+@@ -24,6 +24,7 @@ import android.net.wifi.WifiConfiguration;
+ import android.net.wifi.WifiEnterpriseConfig;
+ import android.os.HidlSupport.Mutable;
+ import android.os.RemoteException;
++import android.os.SystemProperties;
+ import android.text.TextUtils;
+ import android.util.Log;
+ import android.util.MutableBoolean;
+@@ -3012,7 +3013,11 @@ public class SupplicantStaNetworkHal {
+                 return modifiedFlags;
+             }
+ 
+-            if (keyManagementFlags.get(WifiConfiguration.KeyMgmt.WPA_PSK)) {
++            // Legacy firmware can advertise PSK while selecting SHA256 internally,
++            // then reject the peer's otherwise valid WPA2 EAPOL-Key descriptor.
++            // Keep explicitly requested AKMs; this only gates the automatic addition.
++            if (keyManagementFlags.get(WifiConfiguration.KeyMgmt.WPA_PSK)
++                    && SystemProperties.getBoolean("ro.vendor.wifi.auto_psk_sha256", true)) {
+                 modifiedFlags.set(WifiConfiguration.KeyMgmt.WPA_PSK_SHA256);
+             }
+             if (keyManagementFlags.get(WifiConfiguration.KeyMgmt.WPA_EAP)) {

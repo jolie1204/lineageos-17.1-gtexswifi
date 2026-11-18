@@ -1,0 +1,76 @@
+{
+  "projects": [
+    {
+      "project": "device/samsung/gtexswifi",
+      "base_commit": "0826fd4d9714e0c5568383a408a55801b958c9c2",
+      "patch": "device__samsung__gtexswifi.patch",
+      "sha256": "1aa1e40a933e3684ec72a927b9a9774180735edb5f826a97f72000cd0be42347"
+    },
+    {
+      "project": "kernel/samsung/gtexswifi",
+      "base_commit": "af605083776fb8ec1197e7aafb291bff6043c0a2",
+      "patch": "kernel__samsung__gtexswifi.patch",
+      "sha256": "5cf96e8f7e3bc7f2986b9a99ae0e65a5a091272612f5b2f8d61b8d9af0f4e6eb"
+    },
+    {
+      "project": "hardware/sprd",
+      "base_commit": "13ebb821b17fcd53e7c02dc1b11374f56046109a",
+      "patch": "hardware__sprd.patch",
+      "sha256": "bd5f3404d3651fcbd2e0d0bd33a0fff5404153b368479b9ad053d6e9bcaefd7b"
+    },
+    {
+      "project": "vendor/samsung/gtexswifi",
+      "base_commit": "b65668464d13a608d74670fad197d351c71e3e0c",
+      "patch": "vendor__samsung__gtexswifi.patch",
+      "sha256": "7b832758538405ead497cbe80a9a385dd19d5cd7e05cfa64ecf3c5a8107f818c"
+    },
+    {
+      "project": "frameworks/opt/net/wifi",
+      "base_commit": "2fd35dfa929a519ccce72dc1c8e079f59f907dd1",
+      "patch": "frameworks__opt__net__wifi.patch",
+      "sha256": "41693c611a918f6a3b96994acfb770d4fba40313e28ea20a837a83d314bf444b"
+    },
+    {
+      "project": "system/libvintf",
+      "base_commit": "a9844b4efa24fbce6c70cc75e3f303d3051b5767",
+      "patch": "system__libvintf.patch",
+      "sha256": "6ed930aedb561678559420667b493c81b60daab86dd8245f54672b628d66b4cc"
+    },
+    {
+      "project": "system/hardware/interfaces",
+      "base_commit": "5c145c49cc83bfe37c740bcfd3f82715ee051122",
+      "patch": "system__hardware__interfaces.patch",
+      "sha256": "a36b92dad998c2ec8dcab9cb329a17f6956c3b1d67fc8332f57f18b0f926d321"
+    },
+    {
+      "project": "system/bt",
+      "base_commit": "a15831c01596b53d57482812678bcc8276f3c401",
+      "patch": "system__bt.patch",
+      "sha256": "2682367652480c5ceda2e71bcb8cff5d3883f1c0f285dfa375d22a31b3640e11"
+    },
+    {
+      "project": "hardware/interfaces",
+      "base_commit": "02951860e9c95f19384fa07522925537d8c17a18",
+      "patch": "hardware__interfaces.patch",
+      "sha256": "8c063dfac5830b257ab5c1add80ad7ded9eb3f8712a9308b3a6161fc8ec78e6f"
+    },
+    {
+      "project": "frameworks/av",
+      "base_commit": "c2725f53d8e9d6dfa5b853124d21249d2db106da",
+      "patch": "frameworks__av.patch",
+      "sha256": "ef325a28fa5da3c4c6890cc68a4e37412204320b058837d853f5e32ad0db4649"
+    },
+    {
+      "project": "vendor/lineage",
+      "base_commit": "e85694867b50377d7cfc82edd7417dde0b5ac386",
+      "patch": "vendor__lineage.patch",
+      "sha256": "dfcc0ddcff88355d70a9521ecfe6df90ff7bdf8b0897dca4429a3d213da03924"
+    },
+    {
+      "project": "packages/apps/Camera2",
+      "base_commit": "486d65b85d4f84633d34fd824ce1f8307b131c62",
+      "patch": "packages__apps__Camera2.patch",
+      "sha256": "a6c45027e9c9cf874fdb547e4f13d508a4951a85df8026d3302e8428c561fd4d"
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+diff --git a/device/src/controller.cc b/device/src/controller.cc
+index 6525c14..bebcaad 100644
+--- a/device/src/controller.cc
++++ b/device/src/controller.cc
+@@ -183,9 +183,12 @@ static future_t* start_up(void) {
+     page_number++;
+   }
+ 
+-  // read BLE offload features support from controller
++  ble_offload_features_supported = false;
++#if (BLE_VND_INCLUDED == TRUE)
++  // Query Android vendor capabilities only on controllers that support them.
+   response = AWAIT_COMMAND(packet_factory->make_ble_read_offload_features_support());
+   packet_parser->parse_ble_read_offload_features_response(response, &ble_offload_features_supported);
++#endif
+ #if (SC_MODE_INCLUDED == TRUE)
+   if(ble_offload_features_supported) {
+     secure_connections_supported =
+diff --git a/hci/src/hci_layer.cc b/hci/src/hci_layer.cc
+index 79c44e0..05779df 100644
+--- a/hci/src/hci_layer.cc
++++ b/hci/src/hci_layer.cc
+@@ -619,9 +619,27 @@ static bool filter_incoming_event(BT_HDR* packet) {
+           __func__, opcode);
+     } else {
+       update_command_response_timer();
+-      if (wait_entry->status_callback)
++      if (wait_entry->status_callback) {
+         wait_entry->status_callback(status, wait_entry->command,
+                                     wait_entry->context);
++      } else if (wait_entry->complete_future && status != HCI_SUCCESS) {
++        // Rejected synchronous commands can return Command Status instead of
++        // Command Complete. Resolve the future with the same error status;
++        // otherwise its caller waits forever after this entry is removed.
++        BT_HDR* response = static_cast<BT_HDR*>(
++            buffer_allocator->alloc(sizeof(BT_HDR) + 6));
++        response->event = packet->event;
++        response->len = 6;
++        response->offset = 0;
++        response->layer_specific = 0;
++        uint8_t* response_stream = response->data;
++        UINT8_TO_STREAM(response_stream, HCI_COMMAND_COMPLETE_EVT);
++        UINT8_TO_STREAM(response_stream, 4);
++        UINT8_TO_STREAM(response_stream, credits);
++        UINT16_TO_STREAM(response_stream, opcode);
++        UINT8_TO_STREAM(response_stream, status);
++        future_ready(wait_entry->complete_future, response);
++      }
+     }
+ 
+     goto intercepted;
+diff --git a/stack/btm/btm_ble_connection_establishment.cc b/stack/btm/btm_ble_connection_establishment.cc
+index 77bc00f..1daf404 100644
+--- a/stack/btm/btm_ble_connection_establishment.cc
++++ b/stack/btm/btm_ble_connection_establishment.cc
+@@ -133,6 +133,19 @@ void btm_ble_conn_complete(uint8_t* p, UNUSED_ATTR uint16_t evt_len,
+                : android::bluetooth::hci::BLE_EVT_CONN_COMPLETE_EVT;
+ 
+   if (status == HCI_SUCCESS) {
++#if defined(BTM_BLE_LEGACY_PEER_ADDR_TYPE_BROKEN) && \
++    (BTM_BLE_LEGACY_PEER_ADDR_TYPE_BROKEN == TRUE)
++    // Marlin reports Public in legacy Connection Complete even when the
++    // peer was discovered and added to the accept list as Random. Preserve
++    // that known peer type before it is used by SMP authentication.
++    if (!enhanced && role == HCI_ROLE_MASTER && bda_type == BLE_ADDR_PUBLIC) {
++      tBTM_SEC_DEV_REC* peer = btm_find_dev(bda);
++      if (peer != nullptr && peer->ble.ble_addr_type == BLE_ADDR_RANDOM) {
++        bda_type = BLE_ADDR_RANDOM;
++        LOG(INFO) << "Corrected legacy controller peer address type";
++      }
++    }
++#endif
+ #if (BLE_PRIVACY_SPT == TRUE)
+     peer_addr_type = bda_type;
+     bool addr_is_rpa =

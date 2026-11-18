@@ -1,0 +1,121 @@
+diff --git a/src/com/android/camera/VideoModule.java b/src/com/android/camera/VideoModule.java
+index e8222f6..4abb96a 100644
+--- a/src/com/android/camera/VideoModule.java
++++ b/src/com/android/camera/VideoModule.java
+@@ -161,6 +161,8 @@ public class VideoModule extends CameraModule
+     private ContentValues mCurrentVideoValues;
+ 
+     private CamcorderProfile mProfile;
++    // Main-thread cancellation generation for asynchronous storage/start work.
++    private long mVideoStartGeneration = 0;
+ 
+     // The video duration limit. 0 means no limit.
+     private int mMaxVideoDurationInMs;
+@@ -585,6 +587,7 @@ public class VideoModule extends CameraModule
+             Log.w(TAG, "onCameraAvailable returns a null CameraProxy object");
+             return;
+         }
++        ++mVideoStartGeneration;
+         mCameraDevice = cameraProxy;
+         mCameraCapabilities = mCameraDevice.getCapabilities();
+         mAppController.getCameraAppUI().showAccessibilityZoomUI(
+@@ -983,6 +986,7 @@ public class VideoModule extends CameraModule
+ 
+     @Override
+     public void stopPreview() {
++        ++mVideoStartGeneration;
+         if (!mPreviewing) {
+             Log.v(TAG, "Skip stopPreview since it's not mPreviewing");
+             return;
+@@ -1002,6 +1006,7 @@ public class VideoModule extends CameraModule
+ 
+     private void closeCamera() {
+         Log.i(TAG, "closeCamera");
++        ++mVideoStartGeneration;
+         if (mCameraDevice == null) {
+             Log.d(TAG, "already stopped.");
+             return;
+@@ -1137,6 +1142,7 @@ public class VideoModule extends CameraModule
+         // should be ignored.
+         if (camera == null) {
+             Log.w(TAG, "null camera within proxy, not recording");
++            releaseMediaRecorder();
+             return;
+         }
+ 
+@@ -1342,15 +1348,21 @@ public class VideoModule extends CameraModule
+ 
+     private void startVideoRecording() {
+         Log.i(TAG, "startVideoRecording: " + Thread.currentThread());
+-        mUI.cancelAnimations();
+-        mUI.setSwipingEnabled(false);
+-        mUI.hidePassiveFocusIndicator();
+-        mAppController.getCameraAppUI().hideCaptureIndicator();
+-        mAppController.getCameraAppUI().setShouldSuppressCaptureIndicator(true);
++        final CameraProxy requestedCamera = mCameraDevice;
++        if (mPaused || !mPreviewing || requestedCamera == null || mMediaRecorderRecording) {
++            Log.v(TAG, "ignore recording request without an active preview");
++            return;
++        }
++        final long requestedGeneration = ++mVideoStartGeneration;
+ 
+         mActivity.updateStorageSpaceAndHint(new CameraActivity.OnStorageUpdateDoneListener() {
+             @Override
+             public void onStorageUpdateDone(long bytes) {
++                if (mPaused || !mPreviewing || requestedCamera != mCameraDevice
++                        || requestedGeneration != mVideoStartGeneration) {
++                    Log.v(TAG, "ignore stale recording storage callback");
++                    return;
++                }
+                 if (bytes <= Storage.LOW_STORAGE_THRESHOLD_BYTES) {
+                     Log.w(TAG, "Storage issue, ignore the start request");
+                 } else {
+@@ -1373,20 +1385,32 @@ public class VideoModule extends CameraModule
+ 
+                     mCurrentVideoUri = null;
+ 
+-                    initializeRecorder();
+-                    if (mMediaRecorder == null) {
+-                        Log.e(TAG, "Fail to initialize media recorder");
+-                        return;
+-                    }
+-
++                    boolean recorderInitialized = false;
+                     try {
++                        initializeRecorder();
++                        if (mMediaRecorder == null) {
++                            Log.e(TAG, "Fail to initialize media recorder");
++                            return;
++                        }
++                        recorderInitialized = true;
++                        mUI.cancelAnimations();
++                        mUI.setSwipingEnabled(false);
++                        mUI.hidePassiveFocusIndicator();
++                        mAppController.getCameraAppUI().hideCaptureIndicator();
++                        mAppController.getCameraAppUI().setShouldSuppressCaptureIndicator(true);
+                         mMediaRecorder.start(); // Recording is now started
+                     } catch (RuntimeException e) {
+                         Log.e(TAG, "Could not start media recorder. ", e);
+                         mAppController.getFatalErrorHandler().onGenericCameraAccessFailure();
+                         releaseMediaRecorder();
+-                        // If start fails, frameworks will not lock the camera for us.
+-                        mCameraDevice.lock();
++                        mUI.setSwipingEnabled(true);
++                        mUI.showPassiveFocusIndicator();
++                        mAppController.getCameraAppUI().setShouldSuppressCaptureIndicator(false);
++                        // Only a fully initialized recorder owns this camera handoff.
++                        if (recorderInitialized && !mPaused && requestedCamera == mCameraDevice
++                                && requestedGeneration == mVideoStartGeneration) {
++                            requestedCamera.lock();
++                        }
+                         return;
+                     }
+                     // Make sure we stop playing sounds and disable the
+@@ -1774,6 +1798,7 @@ public class VideoModule extends CameraModule
+ 
+     @Override
+     public void pause() {
++        ++mVideoStartGeneration;
+         mPaused = true;
+ 
+         mAppController.getOrientationManager().removeOnOrientationChangeListener(this);

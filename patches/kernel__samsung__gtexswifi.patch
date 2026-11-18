@@ -1,0 +1,1544 @@
+diff --git a/arch/Kconfig b/arch/Kconfig
+index 4c0a1d03..9c08e500 100644
+--- a/arch/Kconfig
++++ b/arch/Kconfig
+@@ -437,4 +437,73 @@ config OLD_SIGACTION
+ config COMPAT_OLD_SIGACTION
+ 	bool
+ 
++config HAVE_ARCH_MMAP_RND_BITS
++	bool
++	help
++	  An arch should select this symbol if it supports setting a variable
++	  number of bits for use in establishing the base address for mmap
++	  allocations, has MMU enabled and provides values for both:
++	  - ARCH_MMAP_RND_BITS_MIN
++	  - ARCH_MMAP_RND_BITS_MAX
++
++config ARCH_MMAP_RND_BITS_MIN
++	int
++
++config ARCH_MMAP_RND_BITS_MAX
++	int
++
++config ARCH_MMAP_RND_BITS_DEFAULT
++	int
++
++config ARCH_MMAP_RND_BITS
++	int "Number of bits to use for ASLR of mmap base address" if EXPERT
++	range ARCH_MMAP_RND_BITS_MIN ARCH_MMAP_RND_BITS_MAX
++	default ARCH_MMAP_RND_BITS_DEFAULT if ARCH_MMAP_RND_BITS_DEFAULT
++	default ARCH_MMAP_RND_BITS_MIN
++	depends on HAVE_ARCH_MMAP_RND_BITS
++	help
++	  This value can be used to select the number of bits to use to
++	  determine the random offset to the base address of vma regions
++	  resulting from mmap allocations. This value will be bounded
++	  by the architecture's minimum and maximum supported values.
++
++	  This value can be changed after boot using the
++	  /proc/sys/vm/mmap_rnd_bits tunable
++
++config HAVE_ARCH_MMAP_RND_COMPAT_BITS
++	bool
++	help
++	  An arch should select this symbol if it supports running applications
++	  in compatibility mode, supports setting a variable number of bits for
++	  use in establishing the base address for mmap allocations, has MMU
++	  enabled and provides values for both:
++	  - ARCH_MMAP_RND_COMPAT_BITS_MIN
++	  - ARCH_MMAP_RND_COMPAT_BITS_MAX
++
++config ARCH_MMAP_RND_COMPAT_BITS_MIN
++	int
++
++config ARCH_MMAP_RND_COMPAT_BITS_MAX
++	int
++
++config ARCH_MMAP_RND_COMPAT_BITS_DEFAULT
++	int
++
++config ARCH_MMAP_RND_COMPAT_BITS
++	int "Number of bits to use for ASLR of mmap base address for compatible applications" if EXPERT
++	range ARCH_MMAP_RND_COMPAT_BITS_MIN ARCH_MMAP_RND_COMPAT_BITS_MAX
++	default ARCH_MMAP_RND_COMPAT_BITS_DEFAULT if ARCH_MMAP_RND_COMPAT_BITS_DEFAULT
++	default ARCH_MMAP_RND_COMPAT_BITS_MIN
++	depends on HAVE_ARCH_MMAP_RND_COMPAT_BITS
++	help
++	  This value can be used to select the number of bits to use to
++	  determine the random offset to the base address of vma regions
++	  resulting from mmap allocations for compatible applications This
++	  value will be bounded by the architecture's minimum and maximum
++	  supported values.
++
++	  This value can be changed after boot using the
++	  /proc/sys/vm/mmap_rnd_compat_bits tunable
++
++
+ source "kernel/gcov/Kconfig"
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index 7dba0b5f..f378b245 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -1,4 +1,5 @@
+ config ARM
++	select HAVE_ARCH_MMAP_RND_BITS if MMU
+ 	bool
+ 	default y
+ 	select ARCH_BINFMT_ELF_RANDOMIZE_PIE
+@@ -2420,3 +2421,11 @@ source "crypto/Kconfig"
+ source "lib/Kconfig"
+ 
+ source "arch/arm/kvm/Kconfig"
++
++config ARCH_MMAP_RND_BITS_MIN
++	default 8
++
++config ARCH_MMAP_RND_BITS_MAX
++	default 14 if PAGE_OFFSET=0x40000000
++	default 15 if PAGE_OFFSET=0x80000000
++	default 16
+diff --git a/arch/arm/boot/dts/sprd-scx35_gtexswifi_battery_r00.dtsi b/arch/arm/boot/dts/sprd-scx35_gtexswifi_battery_r00.dtsi
+index 1c691cfd..bf60dcef 100755
+--- a/arch/arm/boot/dts/sprd-scx35_gtexswifi_battery_r00.dtsi
++++ b/arch/arm/boot/dts/sprd-scx35_gtexswifi_battery_r00.dtsi
+@@ -79,7 +79,7 @@ sprd_fgu: sprd_fgu{
+ 
+ 		battery,adc_check_count = <5>;
+ 
+-		battery,cable_check_type = <5>; /* SEC_BATTERY_CABLE_CHECK_PSY */
++		battery,cable_check_type = <4>; /* PSY; report actual USB charging status */
+ 		battery,cable_source_type = <3>; /* SEC_BATTERY_CABLE_SOURCE_EXTERNAL */
+ 		battery,event_waiting_time = <600>;
+ 		battery,polling_type = <1>; /* SEC_BATTERY_MONITOR_ALARM */
+diff --git a/arch/arm/configs/gtexswifi-dt_defconfig b/arch/arm/configs/gtexswifi-dt_defconfig
+index 81ba60a4..68c9bc3a 100755
+--- a/arch/arm/configs/gtexswifi-dt_defconfig
++++ b/arch/arm/configs/gtexswifi-dt_defconfig
+@@ -108,7 +108,7 @@ CONFIG_LOG_BUF_SHIFT=19
+ CONFIG_CGROUPS=y
+ CONFIG_CGROUP_DEBUG=y
+ CONFIG_CGROUP_FREEZER=y
+-# CONFIG_CGROUP_DEVICE is not set
++CONFIG_CGROUP_DEVICE=y
+ # CONFIG_CPUSETS is not set
+ CONFIG_CGROUP_CPUACCT=y
+ CONFIG_RESOURCE_COUNTERS=y
+@@ -119,7 +119,7 @@ CONFIG_FAIR_GROUP_SCHED=y
+ CONFIG_RT_GROUP_SCHED=y
+ # CONFIG_BLK_CGROUP is not set
+ # CONFIG_CHECKPOINT_RESTORE is not set
+-# CONFIG_NAMESPACES is not set
++CONFIG_NAMESPACES=y
+ CONFIG_UIDGID_CONVERTED=y
+ # CONFIG_UIDGID_STRICT_TYPE_CHECKS is not set
+ # CONFIG_SCHED_AUTOGROUP is not set
+@@ -520,8 +520,8 @@ CONFIG_ATAGS=y
+ CONFIG_ZBOOT_ROM_TEXT=0x0
+ CONFIG_ZBOOT_ROM_BSS=0x0
+ # CONFIG_ARM_APPENDED_DTB is not set
+-CONFIG_CMDLINE="androidboot.selinux=permissive"
+-CONFIG_CMDLINE_FROM_BOOTLOADER=y
++CONFIG_CMDLINE="androidboot.hardware=sc8830 androidboot.selinux=permissive"
++# CONFIG_CMDLINE_FROM_BOOTLOADER is not set
+ CONFIG_CMDLINE_EXTEND=y
+ # CONFIG_CMDLINE_FORCE is not set
+ # CONFIG_XIP_KERNEL is not set
+@@ -1109,7 +1109,7 @@ CONFIG_OF=y
+ #
+ # Device Tree and Open Firmware support
+ #
+-# CONFIG_PROC_DEVICETREE is not set
++CONFIG_PROC_DEVICETREE=y
+ # CONFIG_OF_SELFTEST is not set
+ CONFIG_OF_FLATTREE=y
+ CONFIG_OF_EARLY_FLATTREE=y
+@@ -3665,3 +3665,6 @@ CONFIG_ARCH_HAS_ATOMIC64_DEC_IF_POSITIVE=y
+ CONFIG_LIBFDT=y
+ # CONFIG_E_SHOW_MEM is not set
+ # CONFIG_VIRTUALIZATION is not set
++CONFIG_UTS_NS=y
++CONFIG_PID_NS=y
++CONFIG_NET_NS=y
+diff --git a/arch/arm/mm/mmap.c b/arch/arm/mm/mmap.c
+index 984509eb..569175df 100644
+--- a/arch/arm/mm/mmap.c
++++ b/arch/arm/mm/mmap.c
+@@ -173,10 +173,10 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
+ {
+ 	unsigned long random_factor = 0UL;
+ 
+-	/* 8 bits of randomness in 20 address space bits */
++	/* Runtime-configurable ASLR entropy (upstream ARCH_MMAP_RND_BITS). */
+ 	if ((current->flags & PF_RANDOMIZE) &&
+ 	    !(current->personality & ADDR_NO_RANDOMIZE))
+-		random_factor = (get_random_int() % (1 << 8)) << PAGE_SHIFT;
++		random_factor = ((unsigned long)get_random_int() & ((1UL << mmap_rnd_bits) - 1)) << PAGE_SHIFT;
+ 
+ 	if (mmap_is_legacy()) {
+ 		mm->mmap_base = TASK_UNMAPPED_BASE + random_factor;
+diff --git a/drivers/net/wireless/sc2331/wlan_cfg80211.c b/drivers/net/wireless/sc2331/wlan_cfg80211.c
+index 3fd4690a..87b602e4 100644
+--- a/drivers/net/wireless/sc2331/wlan_cfg80211.c
++++ b/drivers/net/wireless/sc2331/wlan_cfg80211.c
+@@ -861,20 +861,46 @@ static int wlan_cfg80211_scan(struct wiphy *wiphy,
+ 	}
+ 	channels[0] = j;
+ 
+-	ret = wlan_cmd_scan(vif_id, data, channels, scan_ssids_len);
+-	if (ret) {
+-		printkd("wlan_cmd_scan failed with ret %d\n", ret);
++	/* Firmware can complete the scan in the command-response RX batch.
++	 * Publish the request and arm its resources before submitting it.
++	 * scan_status serializes ownership with completion and timeout paths.
++	 */
++	if (atomic_cmpxchg(&vif->cfg80211.scan_status, 0, 1) != 0) {
+ 		kfree(data);
+-		return ret;
++		return -EBUSY;
+ 	}
+-
++	vif->cfg80211.scan_request = request;
+ 	if (vif->cfg80211.scan_done_lock.link.next == LIST_POISON1 ||
+ 	    vif->cfg80211.scan_done_lock.link.prev == LIST_POISON2)
+ 		wake_lock(&vif->cfg80211.scan_done_lock);
+ 	/* Arm scan timeout timer */
+ 	mod_timer(&vif->cfg80211.scan_timeout,
+ 		  jiffies + ITM_SCAN_TIMER_INTERVAL_MS * HZ / 1000);
+-	vif->cfg80211.scan_request = request;
++	/* atomic_xchg publishes the initialized request before RX may own it. */
++	atomic_xchg(&vif->cfg80211.scan_status, 0);
++
++	ret = wlan_cmd_scan(vif_id, data, channels, scan_ssids_len);
++	if (ret) {
++		printkd("wlan_cmd_scan failed with ret %d\n", ret);
++		del_timer_sync(&vif->cfg80211.scan_timeout);
++		if (atomic_cmpxchg(&vif->cfg80211.scan_status, 0, 1) == 0) {
++			if (vif->cfg80211.scan_request == request) {
++				vif->cfg80211.scan_request = NULL;
++				if (vif->cfg80211.scan_done_lock.link.next != LIST_POISON1 &&
++				    vif->cfg80211.scan_done_lock.link.prev != LIST_POISON2)
++					wake_unlock(&vif->cfg80211.scan_done_lock);
++			} else {
++				/* Completion already consumed the accepted request. */
++				ret = 0;
++			}
++			atomic_xchg(&vif->cfg80211.scan_status, 0);
++		} else {
++			/* An in-flight completion owns cleanup and scan_done. */
++			ret = 0;
++		}
++		kfree(data);
++		return ret;
++	}
+ 	kfree(data);
+ 	printkd("%s(), ok!\n", __func__);
+ 	return 0;
+@@ -1935,7 +1961,7 @@ void cfg80211_report_scan_frame(unsigned char vif_id, unsigned char *pData,
+ 	}
+ 	if (!vif->cfg80211.scan_request) {
+ 		printkd("[%s %d][line %d err]\n", __func__, vif_id, __LINE__);
+-		atomic_dec(&vif->cfg80211.scan_status);
++		/* No scan_status ownership was acquired on this path. */
+ 		return;
+ 	}
+ 	if (atomic_add_unless(&vif->cfg80211.scan_status, 1, 1) == 0) {
+diff --git a/drivers/net/wireless/sc2331/wlan_cmd.c b/drivers/net/wireless/sc2331/wlan_cmd.c
+index 895a9412..61a82c45 100644
+--- a/drivers/net/wireless/sc2331/wlan_cmd.c
++++ b/drivers/net/wireless/sc2331/wlan_cmd.c
+@@ -178,6 +178,10 @@ int wlan_cmd_send_to_ic(unsigned char vif_id, unsigned char *data, int len,
+ 	if (ret != OK) {
+ 		printkd("[SEND_CMD][%d][%s][ERR][MSG_Q NULL]\n", vif_id,
+ 			get_cmd_name(subtype));
++		/* Accepted commands are freed by the TX worker.  Rejected ones
++		 * never reach that owner, so release their payload here.
++		 */
++		kfree(msg.slice[0].data);
+ 		return ERROR;
+ 	}
+ 	printkd("[SEND_CMD][%d][%s]\n", vif_id, get_cmd_name(subtype));
+@@ -232,6 +236,8 @@ int wlan_cmd_send_recv(unsigned char vif_id, unsigned char *pData, int len,
+ 
+ 	if (1 == g_wlan.sync.exit) {
+ 		printke("%s, exit flag\n", __func__);
++		if (len > 0)
++			kfree(pData);
+ 		return ERROR;
+ 	}
+ 
+@@ -241,8 +247,11 @@ int wlan_cmd_send_recv(unsigned char vif_id, unsigned char *pData, int len,
+ 		ret = wlan_cmd_send_to_ic(vif_id, NULL, 0, subtype);
+ 	else
+ 		ret = wlan_cmd_send_to_ic(vif_id, pData, len, subtype);
+-	if (OK != ret)
++	if (OK != ret) {
++		/* No response will arrive for a command that was not queued. */
++		mutex_unlock(&(cmd->cmd_lock));
+ 		return ERROR;
++	}
+ 
+ 	ret = wlan_timeout_recv_rsp(r_buf, &r_len, timeout);
+ 	if (-1 == ret) {
+@@ -467,6 +476,8 @@ int wlan_cmd_scan(unsigned char vif_id, const unsigned char *ssid,
+ 
+ 	dataLen = sizeof(struct wlan_cmd_scan) + len + ch_num;
+ 	psend = send = kmalloc(dataLen, GFP_KERNEL);
++	if (!send)
++		return -ENOMEM;
+ 
+ 	memcpy(send, channels, ch_num);
+ 	send += ch_num;
+@@ -476,9 +487,9 @@ int wlan_cmd_scan(unsigned char vif_id, const unsigned char *ssid,
+ 	ptr->len = len;
+ 
+ 	hex_dump("scan data ", 10, psend, dataLen);
+-	wlan_cmd_send_recv(vif_id, (unsigned char *)psend,
+-				dataLen, WIFI_CMD_SET_SCAN, CMD_WAIT_TIMEOUT);
+-	return 0;
++	/* The command queue owns psend after successful enqueue. */
++	return wlan_cmd_send_recv(vif_id, (unsigned char *)psend,
++				 dataLen, WIFI_CMD_SET_SCAN, CMD_WAIT_TIMEOUT);
+ }
+ 
+ int wlan_cmd_set_wpa_version(unsigned char vif_id, unsigned int wpa_version)
+diff --git a/drivers/net/wireless/sc2331/wlan_core.c b/drivers/net/wireless/sc2331/wlan_core.c
+index 77a9b2c1..cc81fc8b 100644
+--- a/drivers/net/wireless/sc2331/wlan_core.c
++++ b/drivers/net/wireless/sc2331/wlan_core.c
+@@ -1349,11 +1349,23 @@ static struct platform_driver sprd_wlan_driver = {
+ 
+ static int sprd_wlan_init(void)
+ {
++	int ret;
++
+ 	sprd_wlan_device =
+ 	    platform_device_register_simple(DEVICE_NAME, 0, NULL, 0);
+ 	if (IS_ERR(sprd_wlan_device))
+ 		return PTR_ERR(sprd_wlan_device);
+-	return platform_driver_register(&(sprd_wlan_driver));
++	/* This module creates a single, non-hotplug platform device above.
++	 * Registration alone succeeds even when probe rejects an unready SDIO
++	 * controller, leaving a loaded module with no wlan interfaces. Propagate
++	 * the probe failure so the normal post-power-on load can try again.
++	 */
++	ret = platform_driver_probe(&sprd_wlan_driver, sprd_wlan_probe);
++	if (ret) {
++		platform_device_unregister(sprd_wlan_device);
++		sprd_wlan_device = NULL;
++	}
++	return ret;
+ }
+ 
+ static void  sprd_wlan_exit(void)
+diff --git a/drivers/staging/android/binder.c b/drivers/staging/android/binder.c
+index 7dd823ab..c3c53f06 100644
+--- a/drivers/staging/android/binder.c
++++ b/drivers/staging/android/binder.c
+@@ -53,9 +53,22 @@ static HLIST_HEAD(binder_dead_nodes);
+ 
+ static struct dentry *binder_debugfs_dir_entry_root;
+ static struct dentry *binder_debugfs_dir_entry_proc;
+-static struct binder_node *binder_context_mgr_node;
+-static kuid_t binder_context_mgr_uid = INVALID_UID;
+ static int binder_last_id;
++
++struct binder_context {
++	struct binder_node *binder_context_mgr_node;
++	kuid_t binder_context_mgr_uid;
++	const char *name;
++};
++
++struct binder_device {
++	struct hlist_node hlist;
++	struct miscdevice miscdev;
++	struct binder_context context;
++};
++
++static char *binder_devices_param = "binder,hwbinder,vndbinder";
++static HLIST_HEAD(binder_devices);
+ static struct workqueue_struct *binder_deferred_workqueue;
+ 
+ #define BINDER_DEBUG_ENTRY(name) \
+@@ -155,7 +168,7 @@ enum binder_stat_types {
+ 
+ struct binder_stats {
+ 	int br[_IOC_NR(BR_FAILED_REPLY) + 1];
+-	int bc[_IOC_NR(BC_DEAD_BINDER_DONE) + 1];
++	int bc[_IOC_NR(BC_REPLY_SG) + 1];
+ 	int obj_created[BINDER_STAT_COUNT];
+ 	int obj_deleted[BINDER_STAT_COUNT];
+ };
+@@ -278,6 +291,7 @@ struct binder_buffer {
+ 	struct binder_node *target_node;
+ 	size_t data_size;
+ 	size_t offsets_size;
++	size_t extra_buffers_size;
+ 	uint8_t data[0];
+ };
+ 
+@@ -294,6 +308,7 @@ struct binder_proc {
+ 	struct rb_root refs_by_desc;
+ 	struct rb_root refs_by_node;
+ 	int pid;
++	struct binder_context *context;
+ 	struct vm_area_struct *vma;
+ 	struct mm_struct *vma_vm_mm;
+ 	struct task_struct *tsk;
+@@ -644,7 +659,9 @@ err_no_vma:
+ 
+ static struct binder_buffer *binder_alloc_buf(struct binder_proc *proc,
+ 					      size_t data_size,
+-					      size_t offsets_size, int is_async)
++					      size_t offsets_size,
++					      size_t extra_buffers_size,
++					      int is_async)
+ {
+ 	struct rb_node *n = proc->free_buffers.rb_node;
+ 	struct binder_buffer *buffer;
+@@ -661,7 +678,8 @@ static struct binder_buffer *binder_alloc_buf(struct binder_proc *proc,
+ 	}
+ 
+ 	size = ALIGN(data_size, sizeof(void *)) +
+-		ALIGN(offsets_size, sizeof(void *));
++		ALIGN(offsets_size, sizeof(void *)) +
++		ALIGN(extra_buffers_size, sizeof(void *));
+ 
+ 	if (size < data_size || size < offsets_size) {
+ 		binder_user_error("%d: got transaction with invalid size %zd-%zd\n",
+@@ -736,6 +754,7 @@ static struct binder_buffer *binder_alloc_buf(struct binder_proc *proc,
+ 		      proc->pid, size, buffer);
+ 	buffer->data_size = data_size;
+ 	buffer->offsets_size = offsets_size;
++	buffer->extra_buffers_size = extra_buffers_size;
+ 	buffer->async_transaction = is_async;
+ 	if (is_async) {
+ 		proc->free_async_space -= size + sizeof(struct binder_buffer);
+@@ -810,7 +829,8 @@ static void binder_free_buf(struct binder_proc *proc,
+ 	buffer_size = binder_buffer_size(proc, buffer);
+ 
+ 	size = ALIGN(buffer->data_size, sizeof(void *)) +
+-		ALIGN(buffer->offsets_size, sizeof(void *));
++		ALIGN(buffer->offsets_size, sizeof(void *)) +
++		ALIGN(buffer->extra_buffers_size, sizeof(void *));
+ 
+ 	binder_debug(BINDER_DEBUG_BUFFER_ALLOC,
+ 		     "%d: binder_free_buf %pK size %zd buffer_size %zd\n",
+@@ -922,7 +942,7 @@ static int binder_inc_node(struct binder_node *node, int strong, int internal,
+ 		if (internal) {
+ 			if (target_list == NULL &&
+ 			    node->internal_strong_refs == 0 &&
+-			    !(node == binder_context_mgr_node &&
++			    !(node == node->proc->context->binder_context_mgr_node &&
+ 			    node->has_strong_ref)) {
+ 				pr_err("invalid inc strong node for %d\n",
+ 					node->debug_id);
+@@ -1046,7 +1066,7 @@ static struct binder_ref *binder_get_ref_for_node(struct binder_proc *proc,
+ 	rb_link_node(&new_ref->rb_node_node, parent, p);
+ 	rb_insert_color(&new_ref->rb_node_node, &proc->refs_by_node);
+ 
+-	new_ref->desc = (node == binder_context_mgr_node) ? 0 : 1;
++	new_ref->desc = (node == proc->context->binder_context_mgr_node) ? 0 : 1;
+ 	for (n = rb_first(&proc->refs_by_desc); n != NULL; n = rb_next(n)) {
+ 		ref = rb_entry(n, struct binder_ref, rb_node_desc);
+ 		if (ref->desc > new_ref->desc)
+@@ -1233,7 +1253,7 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
+ 					      struct binder_buffer *buffer,
+ 					      binder_size_t *failed_at)
+ {
+-	binder_size_t *offp, *off_end;
++	binder_size_t *offp, *off_end, *off_start;
+ 	int debug_id = buffer->debug_id;
+ 
+ 	binder_debug(BINDER_DEBUG_TRANSACTION,
+@@ -1246,6 +1266,7 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
+ 
+ 	offp = (binder_size_t *)(buffer->data +
+ 				 ALIGN(buffer->data_size, sizeof(void *)));
++	off_start = offp; /* V75 */
+ 	if (failed_at)
+ 		off_end = failed_at;
+ 	else
+@@ -1295,6 +1316,45 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
+ 			if (failed_at)
+ 				task_close_fd(proc, fp->handle);
+ 			break;
++		case BINDER_TYPE_PTR:
++			/* buffer SG: nada que liberar */
++			break;
++		case BINDER_TYPE_FDA: { /* V75: como upstream, el kernel cierra los fds */
++			struct binder_fd_array_object *fda =
++				(struct binder_fd_array_object *)fp;
++			struct binder_buffer_object *parent;
++			binder_size_t parent_index = (binder_size_t)(offp - off_start);
++			uintptr_t parent_buffer;
++			u32 *fd_array;
++			size_t fd_index;
++
++			if (fda->parent >= parent_index) {
++				pr_err("transaction release %d bad FDA parent index\n",
++				       debug_id);
++				break;
++			}
++			parent = (struct binder_buffer_object *)
++				(buffer->data + off_start[fda->parent]);
++			if (parent->hdr.type != BINDER_TYPE_PTR) {
++				pr_err("transaction release %d FDA parent not PTR\n",
++				       debug_id);
++				break;
++			}
++			if (fda->num_fds >= (SIZE_MAX / sizeof(u32)) ||
++			    fda->parent_offset > parent->length ||
++			    parent->length - fda->parent_offset <
++			    sizeof(u32) * fda->num_fds) {
++				pr_err("transaction release %d bad FDA parent_offset\n",
++				       debug_id);
++				break;
++			}
++			/* parent->buffer ya esta fijado a la direccion de usuario de proc */
++			parent_buffer = (uintptr_t)parent->buffer -
++				proc->user_buffer_offset;
++			fd_array = (u32 *)(parent_buffer + fda->parent_offset);
++			for (fd_index = 0; fd_index < fda->num_fds; fd_index++)
++				task_close_fd(proc, fd_array[fd_index]);
++		} break;
+ 
+ 		default:
+ 			pr_err("transaction release %d bad object type %x\n",
+@@ -1304,14 +1364,34 @@ static void binder_transaction_buffer_release(struct binder_proc *proc,
+ 	}
+ }
+ 
++static size_t binder_object_size(__u32 type)
++{
++	switch (type) {
++	case BINDER_TYPE_BINDER:
++	case BINDER_TYPE_WEAK_BINDER:
++	case BINDER_TYPE_HANDLE:
++	case BINDER_TYPE_WEAK_HANDLE:
++	case BINDER_TYPE_FD:
++		return sizeof(struct flat_binder_object);
++	case BINDER_TYPE_PTR:
++		return sizeof(struct binder_buffer_object);
++	case BINDER_TYPE_FDA: /* V31 */
++		return sizeof(struct binder_fd_array_object);
++	default:
++		return 0;
++	}
++}
++
+ static void binder_transaction(struct binder_proc *proc,
+ 			       struct binder_thread *thread,
+-			       struct binder_transaction_data *tr, int reply)
++			       struct binder_transaction_data *tr, int reply,
++			       binder_size_t extra_buffers_size)
+ {
+ 	struct binder_transaction *t;
+ 	struct binder_work *tcomplete;
+-	binder_size_t *offp, *off_end;
++	binder_size_t *offp, *off_end, *off_start;
+ 	binder_size_t off_min;
++	u8 *sg_bufp, *sg_buf_end;
+ 	struct binder_proc *target_proc;
+ 	struct binder_thread *target_thread = NULL;
+ 	struct binder_node *target_node = NULL;
+@@ -1379,7 +1459,7 @@ static void binder_transaction(struct binder_proc *proc,
+ 			}
+ 			target_node = ref->node;
+ 		} else {
+-			target_node = binder_context_mgr_node;
++			target_node = proc->context->binder_context_mgr_node;
+ 			if (target_node == NULL) {
+ 				return_error = BR_DEAD_REPLY;
+ 				goto err_no_context_mgr_node;
+@@ -1473,7 +1553,8 @@ static void binder_transaction(struct binder_proc *proc,
+ 	trace_binder_transaction(reply, t, target_node);
+ 
+ 	t->buffer = binder_alloc_buf(target_proc, tr->data_size,
+-		tr->offsets_size, !reply && (t->flags & TF_ONE_WAY));
++		tr->offsets_size, extra_buffers_size,
++		!reply && (t->flags & TF_ONE_WAY));
+ 	if (t->buffer == NULL) {
+ 		return_error = BR_FAILED_REPLY;
+ 		goto err_binder_alloc_buf_failed;
+@@ -1486,8 +1567,9 @@ static void binder_transaction(struct binder_proc *proc,
+ 	if (target_node)
+ 		binder_inc_node(target_node, 1, 0, NULL);
+ 
+-	offp = (binder_size_t *)(t->buffer->data +
++	off_start = (binder_size_t *)(t->buffer->data +
+ 				 ALIGN(tr->data_size, sizeof(void *)));
++	offp = off_start;
+ 
+ 	if (copy_from_user(t->buffer->data, (const void __user *)(uintptr_t)
+ 			   tr->data.ptr.buffer, tr->data_size)) {
+@@ -1509,24 +1591,38 @@ static void binder_transaction(struct binder_proc *proc,
+ 		return_error = BR_FAILED_REPLY;
+ 		goto err_bad_offset;
+ 	}
+-	off_end = (void *)offp + tr->offsets_size;
++	off_end = (void *)off_start + tr->offsets_size;
++	sg_bufp = (u8 *)(t->buffer->data +
++		ALIGN(tr->data_size, sizeof(void *)) +
++		ALIGN(tr->offsets_size, sizeof(void *)));
++	sg_buf_end = sg_bufp + extra_buffers_size;
+ 	off_min = 0;
+ 	for (; offp < off_end; offp++) {
+ 		struct flat_binder_object *fp;
+-		if (*offp > t->buffer->data_size - sizeof(*fp) ||
++		size_t object_size;
++		if (t->buffer->data_size < sizeof(u32) ||
++		    *offp > t->buffer->data_size - sizeof(u32) ||
+ 		    *offp < off_min ||
+-		    t->buffer->data_size < sizeof(*fp) ||
+ 		    !IS_ALIGNED(*offp, sizeof(u32))) {
+ 			binder_user_error("%d:%d got transaction with invalid offset, %lld (min %lld, max %lld)\n",
+ 					  proc->pid, thread->pid, (u64)*offp,
+ 					  (u64)off_min,
+ 					  (u64)(t->buffer->data_size -
+-					  sizeof(*fp)));
++					  sizeof(u32)));
+ 			return_error = BR_FAILED_REPLY;
+ 			goto err_bad_offset;
+ 		}
+ 		fp = (struct flat_binder_object *)(t->buffer->data + *offp);
+-		off_min = *offp + sizeof(struct flat_binder_object);
++		object_size = binder_object_size(fp->type);
++		if (object_size == 0 ||
++		    t->buffer->data_size < object_size ||
++		    *offp > t->buffer->data_size - object_size) {
++			binder_user_error("%d:%d got transaction with invalid object type/size, %x\n",
++					  proc->pid, thread->pid, fp->type);
++			return_error = BR_FAILED_REPLY;
++			goto err_bad_object_type;
++		}
++		off_min = *offp + object_size;
+ 		switch (fp->type) {
+ 		case BINDER_TYPE_BINDER:
+ 		case BINDER_TYPE_WEAK_BINDER: {
+@@ -1665,6 +1761,138 @@ static void binder_transaction(struct binder_proc *proc,
+ 			fp->binder = 0;
+ 			fp->handle = target_fd;
+ 		} break;
++		case BINDER_TYPE_PTR: {
++			struct binder_buffer_object *bp =
++				(struct binder_buffer_object *)fp;
++			size_t buf_left = sg_buf_end - sg_bufp;
++
++			if (bp->length > buf_left) {
++				binder_user_error("%d:%d got transaction with too large buffer\n",
++						  proc->pid, thread->pid);
++				return_error = BR_FAILED_REPLY;
++				goto err_bad_offset;
++			}
++			if (copy_from_user(sg_bufp,
++					   (const void __user *)(uintptr_t)bp->buffer,
++					   bp->length)) {
++				binder_user_error("%d:%d got transaction with invalid buffer ptr\n",
++						  proc->pid, thread->pid);
++				return_error = BR_FAILED_REPLY;
++				goto err_copy_data_failed;
++			}
++			bp->buffer = (binder_uintptr_t)((uintptr_t)sg_bufp +
++					target_proc->user_buffer_offset);
++			if (bp->flags & BINDER_BUFFER_FLAG_HAS_PARENT) {
++				struct binder_buffer_object *parent;
++				u8 *parent_buffer;
++				binder_size_t parent_index;
++
++				parent_index = (binder_size_t)(offp - off_start);
++				if (bp->parent >= parent_index) {
++					binder_user_error("%d:%d got transaction with invalid parent index\n",
++							  proc->pid, thread->pid);
++					return_error = BR_FAILED_REPLY;
++					goto err_bad_offset;
++				}
++				parent = (struct binder_buffer_object *)
++					(t->buffer->data + off_start[bp->parent]);
++				if (parent->hdr.type != BINDER_TYPE_PTR ||
++				    bp->parent_offset > parent->length ||
++				    parent->length - bp->parent_offset <
++					sizeof(binder_uintptr_t)) {
++					binder_user_error("%d:%d got transaction with invalid parent fixup\n",
++							  proc->pid, thread->pid);
++					return_error = BR_FAILED_REPLY;
++					goto err_bad_offset;
++				}
++				parent_buffer = (u8 *)((uintptr_t)parent->buffer -
++					target_proc->user_buffer_offset);
++				*(binder_uintptr_t *)(parent_buffer +
++					bp->parent_offset) = bp->buffer;
++			}
++			sg_bufp += ALIGN(bp->length, sizeof(u64));
++		} break;
++
++		case BINDER_TYPE_FDA: { /* V31: fd array */
++			struct binder_fd_array_object *fda =
++				(struct binder_fd_array_object *)fp;
++			binder_size_t parent_index, fd_buf_size;
++			struct binder_buffer_object *parent;
++			u8 *parent_buffer;
++			u32 *fd_array;
++			size_t fd_index;
++
++			parent_index = (binder_size_t)(offp - off_start);
++			if (fda->parent >= parent_index) {
++				binder_user_error("%d:%d BINDER_TYPE_FDA bad parent index\n",
++					proc->pid, thread->pid);
++				return_error = BR_FAILED_REPLY;
++				goto err_bad_offset;
++			}
++			parent = (struct binder_buffer_object *)
++				(t->buffer->data + off_start[fda->parent]);
++			if (parent->hdr.type != BINDER_TYPE_PTR) {
++				binder_user_error("%d:%d BINDER_TYPE_FDA parent not PTR\n",
++					proc->pid, thread->pid);
++				return_error = BR_FAILED_REPLY;
++				goto err_bad_offset;
++			}
++			if (fda->num_fds >= (SIZE_MAX / sizeof(u32))) {
++				return_error = BR_FAILED_REPLY;
++				goto err_bad_offset;
++			}
++			fd_buf_size = sizeof(u32) * fda->num_fds;
++			if (fda->parent_offset > parent->length ||
++			    parent->length - fda->parent_offset < fd_buf_size) {
++				binder_user_error("%d:%d BINDER_TYPE_FDA bad parent_offset\n",
++					proc->pid, thread->pid);
++				return_error = BR_FAILED_REPLY;
++				goto err_bad_offset;
++			}
++			parent_buffer = (u8 *)((uintptr_t)parent->buffer -
++				target_proc->user_buffer_offset);
++			fd_array = (u32 *)(parent_buffer + fda->parent_offset);
++			if (!IS_ALIGNED((uintptr_t)fd_array, sizeof(u32))) {
++				return_error = BR_FAILED_REPLY;
++				goto err_bad_offset;
++			}
++			for (fd_index = 0; fd_index < fda->num_fds; fd_index++) {
++				u32 fd = fd_array[fd_index];
++				struct file *file;
++				int target_fd;
++
++				if (reply) {
++					if (!(in_reply_to->flags & TF_ACCEPT_FDS)) {
++						return_error = BR_FAILED_REPLY;
++						goto err_fd_not_allowed;
++					}
++				} else if (!target_node->accept_fds) {
++					return_error = BR_FAILED_REPLY;
++					goto err_fd_not_allowed;
++				}
++				file = fget(fd);
++				if (file == NULL) {
++					binder_user_error("%d:%d BINDER_TYPE_FDA invalid fd %d\n",
++						proc->pid, thread->pid, fd);
++					return_error = BR_FAILED_REPLY;
++					goto err_fget_failed;
++				}
++				if (security_binder_transfer_file(proc->tsk,
++						target_proc->tsk, file) < 0) {
++					fput(file);
++					return_error = BR_FAILED_REPLY;
++					goto err_get_unused_fd_failed;
++				}
++				target_fd = task_get_unused_fd_flags(target_proc, O_CLOEXEC);
++				if (target_fd < 0) {
++					fput(file);
++					return_error = BR_FAILED_REPLY;
++					goto err_get_unused_fd_failed;
++				}
++				task_fd_install(target_proc, target_fd, file);
++				fd_array[fd_index] = target_fd;
++			}
++		} break;
+ 
+ 		default:
+ 			binder_user_error("%d:%d got transaction with invalid object type, %x\n",
+@@ -1773,10 +2001,10 @@ int binder_thread_write(struct binder_proc *proc, struct binder_thread *thread,
+ 			if (get_user(target, (uint32_t __user *)ptr))
+ 				return -EFAULT;
+ 			ptr += sizeof(uint32_t);
+-			if (target == 0 && binder_context_mgr_node &&
++			if (target == 0 && proc->context->binder_context_mgr_node &&
+ 			    (cmd == BC_INCREFS || cmd == BC_ACQUIRE)) {
+ 				ref = binder_get_ref_for_node(proc,
+-					       binder_context_mgr_node);
++					       proc->context->binder_context_mgr_node);
+ 				if (ref->desc != target) {
+ 					binder_user_error("%d:%d tried to acquire reference to desc 0, got %d instead\n",
+ 						proc->pid, thread->pid,
+@@ -1922,6 +2150,17 @@ int binder_thread_write(struct binder_proc *proc, struct binder_thread *thread,
+ 			break;
+ 		}
+ 
++		case BC_TRANSACTION_SG:
++		case BC_REPLY_SG: {
++			struct binder_transaction_data_sg tr;
++
++			if (copy_from_user(&tr, ptr, sizeof(tr)))
++				return -EFAULT;
++			ptr += sizeof(tr);
++			binder_transaction(proc, thread, &tr.transaction_data,
++					   cmd == BC_REPLY_SG, tr.buffers_size);
++			break;
++		}
+ 		case BC_TRANSACTION:
+ 		case BC_REPLY: {
+ 			struct binder_transaction_data tr;
+@@ -1929,7 +2168,7 @@ int binder_thread_write(struct binder_proc *proc, struct binder_thread *thread,
+ 			if (copy_from_user(&tr, ptr, sizeof(tr)))
+ 				return -EFAULT;
+ 			ptr += sizeof(tr);
+-			binder_transaction(proc, thread, &tr, cmd == BC_REPLY);
++			binder_transaction(proc, thread, &tr, cmd == BC_REPLY, 0);
+ 			break;
+ 		}
+ 
+@@ -2678,7 +2917,7 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+ 		}
+ 		break;
+ 	case BINDER_SET_CONTEXT_MGR:
+-		if (binder_context_mgr_node != NULL) {
++		if (proc->context->binder_context_mgr_node != NULL) {
+ 			pr_err("BINDER_SET_CONTEXT_MGR already set\n");
+ 			ret = -EBUSY;
+ 			goto err;
+@@ -2686,25 +2925,25 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+ 		ret = security_binder_set_context_mgr(proc->tsk);
+ 		if (ret < 0)
+ 			goto err;
+-		if (uid_valid(binder_context_mgr_uid)) {
+-			if (!uid_eq(binder_context_mgr_uid, current->cred->euid)) {
++		if (uid_valid(proc->context->binder_context_mgr_uid)) {
++			if (!uid_eq(proc->context->binder_context_mgr_uid, current->cred->euid)) {
+ 				pr_err("BINDER_SET_CONTEXT_MGR bad uid %d != %d\n",
+ 				       from_kuid(&init_user_ns, current->cred->euid),
+-				       from_kuid(&init_user_ns, binder_context_mgr_uid));
++				       from_kuid(&init_user_ns, proc->context->binder_context_mgr_uid));
+ 				ret = -EPERM;
+ 				goto err;
+ 			}
+ 		} else
+-			binder_context_mgr_uid = current->cred->euid;
+-		binder_context_mgr_node = binder_new_node(proc, 0, 0);
+-		if (binder_context_mgr_node == NULL) {
++			proc->context->binder_context_mgr_uid = current->cred->euid;
++		proc->context->binder_context_mgr_node = binder_new_node(proc, 0, 0);
++		if (proc->context->binder_context_mgr_node == NULL) {
+ 			ret = -ENOMEM;
+ 			goto err;
+ 		}
+-		binder_context_mgr_node->local_weak_refs++;
+-		binder_context_mgr_node->local_strong_refs++;
+-		binder_context_mgr_node->has_strong_ref = 1;
+-		binder_context_mgr_node->has_weak_ref = 1;
++		proc->context->binder_context_mgr_node->local_weak_refs++;
++		proc->context->binder_context_mgr_node->local_strong_refs++;
++		proc->context->binder_context_mgr_node->has_strong_ref = 1;
++		proc->context->binder_context_mgr_node->has_weak_ref = 1;
+ 		break;
+ 	case BINDER_THREAD_EXIT:
+ 		binder_debug(BINDER_DEBUG_THREADS, "%d:%d exit\n",
+@@ -2775,7 +3014,7 @@ static int binder_mmap(struct file *filp, struct vm_area_struct *vma)
+ 	const char *failure_string;
+ 	struct binder_buffer *buffer;
+ 
+-	if (proc->tsk != current)
++	if (proc->tsk != current->group_leader)
+ 		return -EINVAL;
+ 
+ 	if ((vma->vm_end - vma->vm_start) > SZ_4M)
+@@ -2869,6 +3108,7 @@ err_bad_arg:
+ static int binder_open(struct inode *nodp, struct file *filp)
+ {
+ 	struct binder_proc *proc;
++	struct binder_device *binder_dev;
+ 
+ 	binder_debug(BINDER_DEBUG_OPEN_CLOSE, "binder_open: %d:%d\n",
+ 		     current->group_leader->pid, current->pid);
+@@ -2876,8 +3116,12 @@ static int binder_open(struct inode *nodp, struct file *filp)
+ 	proc = kzalloc(sizeof(*proc), GFP_KERNEL);
+ 	if (proc == NULL)
+ 		return -ENOMEM;
+-	get_task_struct(current);
+-	proc->tsk = current;
++	/* A Binder process must outlive a short-lived opener thread. */
++	get_task_struct(current->group_leader);
++	proc->tsk = current->group_leader;
++	binder_dev = container_of(filp->private_data,
++				  struct binder_device, miscdev);
++	proc->context = &binder_dev->context;
+ 	INIT_LIST_HEAD(&proc->todo);
+ 	init_waitqueue_head(&proc->wait);
+ 	proc->default_priority = task_nice(current);
+@@ -3006,11 +3250,11 @@ static void binder_deferred_release(struct binder_proc *proc)
+ 
+ 	hlist_del(&proc->proc_node);
+ 
+-	if (binder_context_mgr_node && binder_context_mgr_node->proc == proc) {
++	if (proc->context->binder_context_mgr_node && proc->context->binder_context_mgr_node->proc == proc) {
+ 		binder_debug(BINDER_DEBUG_DEAD_BINDER,
+ 			     "%s: %d context_mgr_node gone\n",
+ 			     __func__, proc->pid);
+-		binder_context_mgr_node = NULL;
++		proc->context->binder_context_mgr_node = NULL;
+ 	}
+ 
+ 	threads = 0;
+@@ -3365,7 +3609,9 @@ static const char * const binder_command_strings[] = {
+ 	"BC_EXIT_LOOPER",
+ 	"BC_REQUEST_DEATH_NOTIFICATION",
+ 	"BC_CLEAR_DEATH_NOTIFICATION",
+-	"BC_DEAD_BINDER_DONE"
++	"BC_DEAD_BINDER_DONE",
++	"BC_TRANSACTION_SG",
++	"BC_REPLY_SG"
+ };
+ 
+ static const char * const binder_objstat_strings[] = {
+@@ -3585,11 +3831,32 @@ static const struct file_operations binder_fops = {
+ 	.release = binder_release,
+ };
+ 
+-static struct miscdevice binder_miscdev = {
+-	.minor = MISC_DYNAMIC_MINOR,
+-	.name = "binder",
+-	.fops = &binder_fops
+-};
++static int __init init_binder_device(const char *name)
++{
++	int ret;
++	struct binder_device *binder_device;
++
++	binder_device = kzalloc(sizeof(*binder_device), GFP_KERNEL);
++	if (!binder_device)
++		return -ENOMEM;
++
++	binder_device->miscdev.fops = &binder_fops;
++	binder_device->miscdev.minor = MISC_DYNAMIC_MINOR;
++	binder_device->miscdev.name = name;
++
++	binder_device->context.binder_context_mgr_uid = INVALID_UID;
++	binder_device->context.name = name;
++
++	ret = misc_register(&binder_device->miscdev);
++	if (ret < 0) {
++		kfree(binder_device);
++		return ret;
++	}
++
++	hlist_add_head(&binder_device->hlist, &binder_devices);
++
++	return ret;
++}
+ 
+ BINDER_DEBUG_ENTRY(state);
+ BINDER_DEBUG_ENTRY(stats);
+@@ -3608,7 +3875,22 @@ static int __init binder_init(void)
+ 	if (binder_debugfs_dir_entry_root)
+ 		binder_debugfs_dir_entry_proc = debugfs_create_dir("proc",
+ 						 binder_debugfs_dir_entry_root);
+-	ret = misc_register(&binder_miscdev);
++	{
++		char *device_name, *device_names, *names_orig;
++
++		ret = -ENOMEM;
++		device_names = kstrdup(binder_devices_param, GFP_KERNEL);
++		if (device_names) {
++			names_orig = device_names;
++			ret = 0;
++			while ((device_name = strsep(&device_names, ",")) != NULL) {
++				ret = init_binder_device(device_name);
++				if (ret)
++					break;
++			}
++			kfree(names_orig);
++		}
++	}
+ 	if (binder_debugfs_dir_entry_root) {
+ 		debugfs_create_file("state",
+ 				    S_IRUGO,
+diff --git a/drivers/staging/android/uapi/binder.h b/drivers/staging/android/uapi/binder.h
+index 4098c502..1fe4aa20 100644
+--- a/drivers/staging/android/uapi/binder.h
++++ b/drivers/staging/android/uapi/binder.h
+@@ -32,6 +32,8 @@ enum {
+ 	BINDER_TYPE_HANDLE	= B_PACK_CHARS('s', 'h', '*', B_TYPE_LARGE),
+ 	BINDER_TYPE_WEAK_HANDLE	= B_PACK_CHARS('w', 'h', '*', B_TYPE_LARGE),
+ 	BINDER_TYPE_FD		= B_PACK_CHARS('f', 'd', '*', B_TYPE_LARGE),
++	BINDER_TYPE_PTR		= B_PACK_CHARS('p', 't', '*', B_TYPE_LARGE),
++	BINDER_TYPE_FDA		= B_PACK_CHARS('f', 'd', 'a', B_TYPE_LARGE),
+ };
+ 
+ enum {
+@@ -268,6 +270,37 @@ enum binder_driver_return_protocol {
+ 	 */
+ };
+ 
++enum {
++	BINDER_BUFFER_FLAG_HAS_PARENT = 0x01,
++};
++
++struct binder_object_header {
++	__u32        type;
++};
++
++struct binder_buffer_object {
++	struct binder_object_header	hdr;
++	__u32				flags;
++	binder_uintptr_t		buffer;
++	binder_size_t			length;
++	binder_size_t			parent;
++	binder_size_t			parent_offset;
++};
++
++/* V31: fd array object (BINDER_TYPE_FDA) */
++struct binder_fd_array_object {
++	struct binder_object_header	hdr;
++	__u32				pad;
++	binder_size_t			num_fds;
++	binder_size_t			parent;
++	binder_size_t			parent_offset;
++};
++
++struct binder_transaction_data_sg {
++	struct binder_transaction_data transaction_data;
++	binder_size_t buffers_size;
++};
++
+ enum binder_driver_command_protocol {
+ 	BC_TRANSACTION = _IOW('c', 0, struct binder_transaction_data),
+ 	BC_REPLY = _IOW('c', 1, struct binder_transaction_data),
+@@ -275,6 +308,12 @@ enum binder_driver_command_protocol {
+ 	 * binder_transaction_data: the sent command.
+ 	 */
+ 
++	BC_TRANSACTION_SG = _IOW('c', 17, struct binder_transaction_data_sg),
++	BC_REPLY_SG = _IOW('c', 18, struct binder_transaction_data_sg),
++	/*
++	 * binder_transaction_data_sg: the sent command.
++	 */
++
+ 	BC_ACQUIRE_RESULT = _IOW('c', 2, __s32),
+ 	/*
+ 	 * not currently supported
+diff --git a/drivers/video/sprdfb/sprdfb_main.c b/drivers/video/sprdfb/sprdfb_main.c
+index 43876285..3a94dfa1 100755
+--- a/drivers/video/sprdfb/sprdfb_main.c
++++ b/drivers/video/sprdfb/sprdfb_main.c
+@@ -43,6 +43,7 @@
+ #include "esd_detect.h"
+ #endif
+ #include <linux/gpio.h>
++#include <linux/earlysuspend.h>
+ #include "sprdfb_chip_common.h"
+ 
+ #include <asm/sec/sec_debug.h>
+@@ -87,6 +88,16 @@ extern unsigned long g_dispc_base_addr;
+ static unsigned PP[16];
+ static int frame_count = 0;
+ 
++/* ANDROID10_POWER_BRIDGE: explicit HWC wake also resumes legacy touch clients. */
++static int sprdfb_power(struct sprdfb_device *dev, int on);
++static void sprdfb_prepare_unblank(void)
++{
++#ifdef CONFIG_HAS_EARLYSUSPEND
++    if (get_suspend_state() != PM_SUSPEND_ON)
++        request_suspend_state(PM_SUSPEND_ON);
++#endif
++}
++
+ static int sprdfb_blank(int blank, struct fb_info *info);
+ static int sprdfb_check_var(struct fb_var_screeninfo *var, struct fb_info *fb);
+ static int sprdfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *fb);
+@@ -428,8 +439,27 @@ static int sprdfb_ioctl(struct fb_info *info, unsigned int cmd,
+ 		break;
+ 
+ 	case SPRD_FB_SET_POWER_MODE:
+-		result = copy_from_user(&power_mode, argp, sizeof(power_mode));
+-		printk("sprdfb: [%s] : SPRD_FB_SET_POWER_MODE (%d)\n", __FUNCTION__, power_mode);
++		if (copy_from_user(&power_mode, argp, sizeof(power_mode))) {
++			result = -EFAULT;
++			break;
++		}
++		pr_info("sprdfb Android10 power mode %d\n", power_mode);
++		switch (power_mode) {
++		case SPRD_FB_POWER_OFF:
++		case SPRD_FB_POWER_SUSPEND:
++			result = sprdfb_power(dev, 0);
++			break;
++		case SPRD_FB_POWER_NORMAL:
++		case SPRD_FB_POWER_DOZE:
++			sprdfb_prepare_unblank();
++			result = sprdfb_power(dev, 1);
++			if (!result && dev->enable)
++				result = dev->ctrl->refresh(dev);
++			break;
++		default:
++			result = -EINVAL;
++			break;
++		}
+ 		break;
+ 
+ 	default:
+@@ -576,17 +606,14 @@ static int sprdfb_power(struct sprdfb_device *dev, int on)
+ 
+ static int sprdfb_blank(int blank, struct fb_info *info)
+ {
+-	struct sprdfb_device *dev = info->par;
+-
+-	pr_info("%s, %s\n", __func__,
+-			blank == FB_BLANK_UNBLANK ? "unblank" : "blank");
+-
+-	sprdfb_power(dev, blank == FB_BLANK_UNBLANK ? 1 : 0);
+-
+-	if (blank == FB_BLANK_UNBLANK)
+-		dev->ctrl->refresh(dev);
+-
+-	return 0;
++    struct sprdfb_device *dev = info->par;
++    int ret;
++    if (blank == FB_BLANK_UNBLANK)
++        sprdfb_prepare_unblank();
++    ret = sprdfb_power(dev, blank == FB_BLANK_UNBLANK ? 1 : 0);
++    if (!ret && blank == FB_BLANK_UNBLANK && dev->enable)
++        ret = dev->ctrl->refresh(dev);
++    return ret;
+ }
+ 
+ #ifdef CONFIG_HAS_EARLYSUSPEND
+diff --git a/fs/pnode.c b/fs/pnode.c
+index 2ef946f5..91c8b885 100644
+--- a/fs/pnode.c
++++ b/fs/pnode.c
+@@ -366,7 +366,14 @@ int propagate_remount(struct mount *mnt) {
+ 	int ret = 0;
+ 
+ 	if (sb->s_op->copy_mnt_data) {
+-		for (m = first_slave(mnt); m->mnt_slave.next != &mnt->mnt_slave_list; m = next_slave(m)) {
++		/* Per-mount options may differ between bind-mount peers.  Walk
++		 * this mount's entire slave subtree, stopping at the next peer
++		 * of the source rather than changing that peer's options.
++		 */
++		for (m = propagation_next(mnt, mnt); m;
++		     m = propagation_next(m, mnt)) {
++			if (m->mnt_master == mnt->mnt_master)
++				break;
+ 			sb->s_op->copy_mnt_data(m->mnt.data, mnt->mnt.data);
+ 		}
+ 	}
+diff --git a/fs/proc/array.c b/fs/proc/array.c
+index 1c4c7867..7360a3b8 100644
+--- a/fs/proc/array.c
++++ b/fs/proc/array.c
+@@ -312,7 +312,7 @@ static void render_cap_t(struct seq_file *m, const char *header,
+ static inline void task_cap(struct seq_file *m, struct task_struct *p)
+ {
+ 	const struct cred *cred;
+-	kernel_cap_t cap_inheritable, cap_permitted, cap_effective, cap_bset;
++	kernel_cap_t cap_inheritable, cap_permitted, cap_effective, cap_bset, cap_ambient;
+ 
+ 	rcu_read_lock();
+ 	cred = __task_cred(p);
+@@ -320,12 +320,14 @@ static inline void task_cap(struct seq_file *m, struct task_struct *p)
+ 	cap_permitted	= cred->cap_permitted;
+ 	cap_effective	= cred->cap_effective;
+ 	cap_bset	= cred->cap_bset;
++	cap_ambient	= cred->cap_ambient;
+ 	rcu_read_unlock();
+ 
+ 	render_cap_t(m, "CapInh:\t", &cap_inheritable);
+ 	render_cap_t(m, "CapPrm:\t", &cap_permitted);
+ 	render_cap_t(m, "CapEff:\t", &cap_effective);
+ 	render_cap_t(m, "CapBnd:\t", &cap_bset);
++	render_cap_t(m, "CapAmb:\t", &cap_ambient);
+ }
+ 
+ static inline void task_seccomp(struct seq_file *m, struct task_struct *p)
+diff --git a/include/linux/cred.h b/include/linux/cred.h
+index cd3fb73d..81ac58cb 100644
+--- a/include/linux/cred.h
++++ b/include/linux/cred.h
+@@ -122,6 +122,7 @@ struct cred {
+ 	kernel_cap_t	cap_permitted;	/* caps we're permitted */
+ 	kernel_cap_t	cap_effective;	/* caps we can actually use */
+ 	kernel_cap_t	cap_bset;	/* capability bounding set */
++	kernel_cap_t	cap_ambient;	/* Ambient capability set */
+ #ifdef CONFIG_KEYS
+ 	unsigned char	jit_keyring;	/* default keyring to attach requested
+ 					 * keys to */
+@@ -197,6 +198,13 @@ static inline void validate_process_creds(void)
+ }
+ #endif
+ 
++static inline bool cap_ambient_invariant_ok(const struct cred *cred)
++{
++	return cap_issubset(cred->cap_ambient,
++			    cap_intersect(cred->cap_permitted,
++					  cred->cap_inheritable));
++}
++
+ /**
+  * get_new_cred - Get a reference on a new set of credentials
+  * @cred: The new credentials to reference
+diff --git a/include/linux/earlysuspend.h b/include/linux/earlysuspend.h
+index 8343b817..45286c4f 100755
+--- a/include/linux/earlysuspend.h
++++ b/include/linux/earlysuspend.h
+@@ -18,6 +18,7 @@
+ 
+ #ifdef CONFIG_HAS_EARLYSUSPEND
+ #include <linux/list.h>
++#include <linux/suspend.h>
+ #endif
+ 
+ /* The early_suspend structure defines suspend and resume hooks to be called
+@@ -47,6 +48,8 @@ struct early_suspend {
+ #ifdef CONFIG_HAS_EARLYSUSPEND
+ void register_early_suspend(struct early_suspend *handler);
+ void unregister_early_suspend(struct early_suspend *handler);
++void request_suspend_state(suspend_state_t state);
++suspend_state_t get_suspend_state(void);
+ #else
+ #define register_early_suspend(handler) do { } while (0)
+ #define unregister_early_suspend(handler) do { } while (0)
+diff --git a/include/linux/mm.h b/include/linux/mm.h
+index 8caa4073..375de200 100644
+--- a/include/linux/mm.h
++++ b/include/linux/mm.h
+@@ -40,6 +40,18 @@ extern int sysctl_legacy_va_layout;
+ #define sysctl_legacy_va_layout 0
+ #endif
+ 
++#ifdef CONFIG_HAVE_ARCH_MMAP_RND_BITS
++extern const int mmap_rnd_bits_min;
++extern const int mmap_rnd_bits_max;
++extern int mmap_rnd_bits __read_mostly;
++#endif
++#ifdef CONFIG_HAVE_ARCH_MMAP_RND_COMPAT_BITS
++extern const int mmap_rnd_compat_bits_min;
++extern const int mmap_rnd_compat_bits_max;
++extern int mmap_rnd_compat_bits __read_mostly;
++#endif
++
++
+ #include <asm/page.h>
+ #include <asm/pgtable.h>
+ #include <asm/processor.h>
+diff --git a/include/uapi/linux/prctl.h b/include/uapi/linux/prctl.h
+index 28bb0b3a..5210e82d 100644
+--- a/include/uapi/linux/prctl.h
++++ b/include/uapi/linux/prctl.h
+@@ -158,4 +158,11 @@
+ #define PR_SET_VMA		0x53564d41
+ # define PR_SET_VMA_ANON_NAME		0
+ 
++/* Control the ambient capability set */
++#define PR_CAP_AMBIENT			47
++# define PR_CAP_AMBIENT_IS_SET		1
++# define PR_CAP_AMBIENT_RAISE		2
++# define PR_CAP_AMBIENT_LOWER		3
++# define PR_CAP_AMBIENT_CLEAR_ALL	4
++
+ #endif /* _LINUX_PRCTL_H */
+diff --git a/include/uapi/linux/securebits.h b/include/uapi/linux/securebits.h
+index 985aac9e..35ac35ce 100644
+--- a/include/uapi/linux/securebits.h
++++ b/include/uapi/linux/securebits.h
+@@ -43,9 +43,18 @@
+ #define SECBIT_KEEP_CAPS	(issecure_mask(SECURE_KEEP_CAPS))
+ #define SECBIT_KEEP_CAPS_LOCKED (issecure_mask(SECURE_KEEP_CAPS_LOCKED))
+ 
++/* When set, a process cannot add new capabilities to its ambient set. */
++#define SECURE_NO_CAP_AMBIENT_RAISE		6
++#define SECURE_NO_CAP_AMBIENT_RAISE_LOCKED	7  /* make bit-6 immutable */
++
++#define SECBIT_NO_CAP_AMBIENT_RAISE (issecure_mask(SECURE_NO_CAP_AMBIENT_RAISE))
++#define SECBIT_NO_CAP_AMBIENT_RAISE_LOCKED \
++			(issecure_mask(SECURE_NO_CAP_AMBIENT_RAISE_LOCKED))
++
+ #define SECURE_ALL_BITS		(issecure_mask(SECURE_NOROOT) | \
+ 				 issecure_mask(SECURE_NO_SETUID_FIXUP) | \
+-				 issecure_mask(SECURE_KEEP_CAPS))
++				 issecure_mask(SECURE_KEEP_CAPS) | \
++				 issecure_mask(SECURE_NO_CAP_AMBIENT_RAISE))
+ #define SECURE_ALL_LOCKS	(SECURE_ALL_BITS << 1)
+ 
+ #endif /* _UAPI_LINUX_SECUREBITS_H */
+diff --git a/kernel/sysctl.c b/kernel/sysctl.c
+index d992124e..7e047872 100644
+--- a/kernel/sysctl.c
++++ b/kernel/sysctl.c
+@@ -1088,6 +1088,29 @@ static struct ctl_table kern_table[] = {
+ };
+ 
+ static struct ctl_table vm_table[] = {
++#ifdef CONFIG_HAVE_ARCH_MMAP_RND_BITS
++	{
++		.procname	= "mmap_rnd_bits",
++		.data		= &mmap_rnd_bits,
++		.maxlen		= sizeof(mmap_rnd_bits),
++		.mode		= 0600,
++		.proc_handler	= proc_dointvec_minmax,
++		.extra1		= (void *)&mmap_rnd_bits_min,
++		.extra2		= (void *)&mmap_rnd_bits_max,
++	},
++#endif
++#ifdef CONFIG_HAVE_ARCH_MMAP_RND_COMPAT_BITS
++	{
++		.procname	= "mmap_rnd_compat_bits",
++		.data		= &mmap_rnd_compat_bits,
++		.maxlen		= sizeof(mmap_rnd_compat_bits),
++		.mode		= 0600,
++		.proc_handler	= proc_dointvec_minmax,
++		.extra1		= (void *)&mmap_rnd_compat_bits_min,
++		.extra2		= (void *)&mmap_rnd_compat_bits_max,
++	},
++#endif
++
+ 	{
+ 		.procname	= "overcommit_memory",
+ 		.data		= &sysctl_overcommit_memory,
+diff --git a/kernel/user_namespace.c b/kernel/user_namespace.c
+index 3f2fb33d..5dc3603d 100644
+--- a/kernel/user_namespace.c
++++ b/kernel/user_namespace.c
+@@ -39,6 +39,7 @@ static void set_cred_user_ns(struct cred *cred, struct user_namespace *user_ns)
+ 	cred->cap_inheritable = CAP_EMPTY_SET;
+ 	cred->cap_permitted = CAP_FULL_SET;
+ 	cred->cap_effective = CAP_FULL_SET;
++	cred->cap_ambient = CAP_EMPTY_SET;
+ 	cred->cap_bset = CAP_FULL_SET;
+ #ifdef CONFIG_KEYS
+ 	key_put(cred->request_key_auth);
+diff --git a/mm/mmap.c b/mm/mmap.c
+index 0f3ed89b..58da52c8 100644
+--- a/mm/mmap.c
++++ b/mm/mmap.c
+@@ -52,6 +52,18 @@
+ #define arch_rebalance_pgtables(addr, len)		(addr)
+ #endif
+ 
++#ifdef CONFIG_HAVE_ARCH_MMAP_RND_BITS
++const int mmap_rnd_bits_min = CONFIG_ARCH_MMAP_RND_BITS_MIN;
++const int mmap_rnd_bits_max = CONFIG_ARCH_MMAP_RND_BITS_MAX;
++int mmap_rnd_bits __read_mostly = CONFIG_ARCH_MMAP_RND_BITS;
++#endif
++#ifdef CONFIG_HAVE_ARCH_MMAP_RND_COMPAT_BITS
++const int mmap_rnd_compat_bits_min = CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MIN;
++const int mmap_rnd_compat_bits_max = CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MAX;
++int mmap_rnd_compat_bits __read_mostly = CONFIG_ARCH_MMAP_RND_COMPAT_BITS;
++#endif
++
++
+ static void unmap_region(struct mm_struct *mm,
+ 		struct vm_area_struct *vma, struct vm_area_struct *prev,
+ 		unsigned long start, unsigned long end);
+diff --git a/net/ipv4/fib_semantics.c b/net/ipv4/fib_semantics.c
+index bc773a10..d00d8f96 100644
+--- a/net/ipv4/fib_semantics.c
++++ b/net/ipv4/fib_semantics.c
+@@ -629,6 +629,7 @@ static int fib_check_nh(struct fib_config *cfg, struct fib_info *fi,
+ 				.daddr = nh->nh_gw,
+ 				.flowi4_scope = cfg->fc_scope + 1,
+ 				.flowi4_oif = nh->nh_oif,
++				.flowi4_iif = LOOPBACK_IFINDEX,
+ 			};
+ 
+ 			/* It is not necessary, but requires a bit of thinking */
+diff --git a/security/commoncap.c b/security/commoncap.c
+index a1604158..bddd2c6e 100644
+--- a/security/commoncap.c
++++ b/security/commoncap.c
+@@ -305,6 +305,16 @@ int cap_capset(struct cred *new,
+ 	new->cap_effective   = *effective;
+ 	new->cap_inheritable = *inheritable;
+ 	new->cap_permitted   = *permitted;
++
++	/*
++	 * Mask off ambient bits that are no longer both permitted and
++	 * inheritable.
++	 */
++	new->cap_ambient = cap_intersect(new->cap_ambient,
++					 cap_intersect(*permitted,
++						       *inheritable));
++	if (WARN_ON(!cap_ambient_invariant_ok(new)))
++		return -EINVAL;
+ 	return 0;
+ }
+ 
+@@ -385,6 +395,7 @@ static inline int bprm_caps_from_vfs_caps(struct cpu_vfs_cap_data *caps,
+ 
+ 		/*
+ 		 * pP' = (X & fP) | (pI & fI)
++		 * The addition of pA' is handled later.
+ 		 */
+ 		new->cap_permitted.cap[i] =
+ 			(new->cap_bset.cap[i] & permitted) |
+@@ -516,10 +527,13 @@ int cap_bprm_set_creds(struct linux_binprm *bprm)
+ {
+ 	const struct cred *old = current_cred();
+ 	struct cred *new = bprm->cred;
+-	bool effective, has_cap = false;
++	bool effective, has_cap = false, is_setid;
+ 	int ret;
+ 	kuid_t root_uid;
+ 
++	if (WARN_ON(!cap_ambient_invariant_ok(old)))
++		return -EPERM;
++
+ 	effective = false;
+ 	ret = get_file_caps(bprm, &effective, &has_cap);
+ 	if (ret < 0)
+@@ -564,8 +578,9 @@ skip:
+ 	 *
+ 	 * In addition, if NO_NEW_PRIVS, then ensure we get no new privs.
+ 	 */
+-	if ((!uid_eq(new->euid, old->uid) ||
+-	     !gid_eq(new->egid, old->gid) ||
++	is_setid = !uid_eq(new->euid, old->uid) || !gid_eq(new->egid, old->gid);
++
++	if ((is_setid ||
+ 	     !cap_issubset(new->cap_permitted, old->cap_permitted)) &&
+ 	    bprm->unsafe & ~LSM_UNSAFE_PTRACE_CAP) {
+ 		/* downgrade; they get no more than they had, and maybe less */
+@@ -581,10 +596,28 @@ skip:
+ 	new->suid = new->fsuid = new->euid;
+ 	new->sgid = new->fsgid = new->egid;
+ 
++	/* File caps or setid cancels ambient. */
++	if (has_cap || is_setid)
++		cap_clear(new->cap_ambient);
++
++	/*
++	 * Now that we've computed pA', update pP' to give:
++	 *   pP' = (X & fP) | (pI & fI) | pA'
++	 */
++	new->cap_permitted = cap_combine(new->cap_permitted, new->cap_ambient);
++
++	/*
++	 * Set pE' = (fE ? pP' : pA').  Because pA' is zero if fE is set,
++	 * this is the same as pE' = (fE ? pP' : 0) | pA'.
++	 */
+ 	if (effective)
+ 		new->cap_effective = new->cap_permitted;
+ 	else
+-		cap_clear(new->cap_effective);
++		new->cap_effective = new->cap_ambient;
++
++	if (WARN_ON(!cap_ambient_invariant_ok(new)))
++		return -EPERM;
++
+ 	bprm->cap_effective = effective;
+ 
+ 	/*
+@@ -599,7 +632,7 @@ skip:
+ 	 * Number 1 above might fail if you don't have a full bset, but I think
+ 	 * that is interesting information to audit.
+ 	 */
+-	if (!cap_isclear(new->cap_effective)) {
++	if (!cap_issubset(new->cap_effective, new->cap_ambient)) {
+ 		if (!cap_issubset(CAP_FULL_SET, new->cap_effective) ||
+ 		    !uid_eq(new->euid, root_uid) || !uid_eq(new->uid, root_uid) ||
+ 		    issecure(SECURE_NOROOT)) {
+@@ -610,6 +643,10 @@ skip:
+ 	}
+ 
+ 	new->securebits &= ~issecure_mask(SECURE_KEEP_CAPS);
++
++	if (WARN_ON(!cap_ambient_invariant_ok(new)))
++		return -EPERM;
++
+ 	return 0;
+ }
+ 
+@@ -631,7 +668,7 @@ int cap_bprm_secureexec(struct linux_binprm *bprm)
+ 	if (!uid_eq(cred->uid, root_uid)) {
+ 		if (bprm->cap_effective)
+ 			return 1;
+-		if (!cap_isclear(cred->cap_permitted))
++		if (!cap_issubset(cred->cap_permitted, cred->cap_ambient))
+ 			return 1;
+ 	}
+ 
+@@ -733,10 +770,18 @@ static inline void cap_emulate_setxuid(struct cred *new, const struct cred *old)
+ 	     uid_eq(old->suid, root_uid)) &&
+ 	    (!uid_eq(new->uid, root_uid) &&
+ 	     !uid_eq(new->euid, root_uid) &&
+-	     !uid_eq(new->suid, root_uid)) &&
+-	    !issecure(SECURE_KEEP_CAPS)) {
+-		cap_clear(new->cap_permitted);
+-		cap_clear(new->cap_effective);
++	     !uid_eq(new->suid, root_uid))) {
++		if (!issecure(SECURE_KEEP_CAPS)) {
++			cap_clear(new->cap_permitted);
++			cap_clear(new->cap_effective);
++		}
++
++		/*
++		 * Pre-ambient programs expect setresuid to nonroot followed
++		 * by exec to drop capabilities.  We should make sure that
++		 * this remains the case.
++		 */
++		cap_clear(new->cap_ambient);
+ 	}
+ 	if (uid_eq(old->euid, root_uid) && !uid_eq(new->euid, root_uid))
+ 		cap_clear(new->cap_effective);
+@@ -985,6 +1030,44 @@ int cap_task_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 			new->securebits &= ~issecure_mask(SECURE_KEEP_CAPS);
+ 		goto changed;
+ 
++	case PR_CAP_AMBIENT:
++		if (arg2 == PR_CAP_AMBIENT_CLEAR_ALL) {
++			if (arg3 | arg4 | arg5)
++				return -EINVAL;
++
++			new = prepare_creds();
++			if (!new)
++				return -ENOMEM;
++			cap_clear(new->cap_ambient);
++			return commit_creds(new);
++		}
++
++		if (((!cap_valid(arg3)) | arg4 | arg5))
++			return -EINVAL;
++
++		if (arg2 == PR_CAP_AMBIENT_IS_SET) {
++			return !!cap_raised(current_cred()->cap_ambient, arg3);
++		} else if (arg2 != PR_CAP_AMBIENT_RAISE &&
++			   arg2 != PR_CAP_AMBIENT_LOWER) {
++			return -EINVAL;
++		} else {
++			if (arg2 == PR_CAP_AMBIENT_RAISE &&
++			    (!cap_raised(current_cred()->cap_permitted, arg3) ||
++			     !cap_raised(current_cred()->cap_inheritable,
++					 arg3) ||
++			     issecure(SECURE_NO_CAP_AMBIENT_RAISE)))
++				return -EPERM;
++
++			new = prepare_creds();
++			if (!new)
++				return -ENOMEM;
++			if (arg2 == PR_CAP_AMBIENT_RAISE)
++				cap_raise(new->cap_ambient, arg3);
++			else
++				cap_lower(new->cap_ambient, arg3);
++			return commit_creds(new);
++		}
++
+ 	default:
+ 		/* No functionality available - continue with default */
+ 		error = -ENOSYS;
+diff --git a/security/keys/process_keys.c b/security/keys/process_keys.c
+index f58a5aa0..1c963ff8 100644
+--- a/security/keys/process_keys.c
++++ b/security/keys/process_keys.c
+@@ -861,6 +861,7 @@ void key_change_session_keyring(struct callback_head *twork)
+ 	new->cap_inheritable	= old->cap_inheritable;
+ 	new->cap_permitted	= old->cap_permitted;
+ 	new->cap_effective	= old->cap_effective;
++	new->cap_ambient	= old->cap_ambient;
+ 	new->cap_bset		= old->cap_bset;
+ 
+ 	new->jit_keyring	= old->jit_keyring;

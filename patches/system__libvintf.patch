@@ -1,0 +1,16 @@
+diff --git a/check_vintf.cpp b/check_vintf.cpp
+index c605053..cfb990b 100644
+--- a/check_vintf.cpp
++++ b/check_vintf.cpp
+@@ -269,6 +269,11 @@ int main(int argc, char** argv) {
+             std::cerr << "Debug: checking files under " << rootdir << "..." << std::endl;
+             std::string error;
+             int compat = checkAllFiles(rootdir, properties, &error);
++            // Preserve a failed per-root result for the process exit status.
++            if (compat != COMPATIBLE) ret = compat;
++            if (compat != COMPATIBLE && !error.empty()) {
++                std::cerr << "Compatibility detail: " << error << std::endl;
++            }
+             std::cerr << "Debug: files under " << rootdir
+                       << (compat == COMPATIBLE
+                               ? " is compatible"

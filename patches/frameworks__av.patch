@@ -1,0 +1,63 @@
+diff --git a/apex/Android.bp b/apex/Android.bp
+index 42a620b..904783b 100644
+--- a/apex/Android.bp
++++ b/apex/Android.bp
+@@ -88,6 +88,13 @@ prebuilt_etc {
+ prebuilt_etc {
+     name: "com.android.media.swcodec-ld.config.txt",
+     src: "ld.config.txt",
++    product_variables: {
++        lineage: {
++            target_swcodec_ld_config: {
++                src: "%s",
++            },
++        },
++    },
+     filename: "ld.config.txt",
+     installable: false,
+ }
+diff --git a/services/camera/libcameraservice/device1/CameraHardwareInterface.cpp b/services/camera/libcameraservice/device1/CameraHardwareInterface.cpp
+index 4984854..5727a8d 100644
+--- a/services/camera/libcameraservice/device1/CameraHardwareInterface.cpp
++++ b/services/camera/libcameraservice/device1/CameraHardwareInterface.cpp
+@@ -17,6 +17,7 @@
+ //#define LOG_NDEBUG 0
+ 
+ #include <inttypes.h>
++#include <cutils/properties.h>
+ #include <media/hardware/HardwareAPI.h> // For VideoNativeHandleMetadata
+ #include "CameraHardwareInterface.h"
+ 
+@@ -464,6 +465,9 @@ status_t CameraHardwareInterface::setPreviewWindow(const sp<ANativeWindow>& buf)
+ {
+     ALOGV("%s(%s) buf %p", __FUNCTION__, mName.string(), buf.get());
+     if (CC_LIKELY(mHidlDevice != nullptr)) {
++        const bool preserveWindow=property_get_bool(
++                "ro.vendor.camera.gtex_preserve_preview_window",false);
++        const sp<ANativeWindow> previousWindow=mPreviewWindow;
+         mPreviewWindow = buf;
+         if (buf != nullptr) {
+             if (mPreviewScalingMode != NOT_SET) {
+@@ -473,8 +477,20 @@ status_t CameraHardwareInterface::setPreviewWindow(const sp<ANativeWindow>& buf)
+                 setPreviewTransform(mPreviewTransform);
+             }
+         }
+-        return CameraProviderManager::mapToStatusT(
+-                mHidlDevice->setPreviewWindow(buf.get() ? this : nullptr));
++        // The vendor setter waits for asynchronous parameter changes before
++        // reconfiguring its queue. Reattaching the same window can therefore
++        // destroy buffers allocated by a preview restart still pending here.
++        // The HAL already reapplies geometry and allocates buffers on restart.
++        if(preserveWindow && buf!=nullptr && previousWindow.get()==buf.get()) {
++            return OK;
++        }
++        auto result=mHidlDevice->setPreviewWindow(buf.get() ? this : nullptr);
++        const status_t status=result.isOk() ?
++                CameraProviderManager::mapToStatusT(result) : DEAD_OBJECT;
++        // A failed attachment must remain retryable. Callback dispatch needs
++        // the requested window during the synchronous setter above.
++        if(preserveWindow && status!=OK) mPreviewWindow=previousWindow;
++        return status;
+     }
+     return INVALID_OPERATION;
+ }
